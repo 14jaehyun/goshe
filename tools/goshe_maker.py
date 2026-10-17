@@ -1,5 +1,19 @@
 # Goshé. 스크립트 만들기 — 유튜브 링크 → Whisper 단어 시간 → 문장 단위 .goshe.json (iCloud Drive\Goshe)
-import os, re, sys, json, glob, tempfile, shutil
+import os, re, sys, json, glob, tempfile, shutil, warnings
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
+warnings.filterwarnings("ignore")
+
+def _patch_av():
+    """새 PyAV는 faster-whisper가 넘기는 metadata_errors 인자를 없앴음 → 빼고 호출"""
+    try:
+        import av
+        if getattr(av, "_goshe", False): return
+        _open = av.open
+        def op(*a, **k):
+            k.pop("metadata_errors", None); return _open(*a, **k)
+        av.open = op; av._goshe = True
+    except Exception: pass
 
 MODEL = os.environ.get("GOSHE_MODEL", "medium.en")   # 느리면 small.en
 
@@ -52,6 +66,7 @@ def make(link):
     vid = vid_of(link.strip())
     if not vid:
         print("! 유튜브 링크가 아니에요"); return
+    _patch_av()
     from faster_whisper import WhisperModel
     tmp = tempfile.mkdtemp()
     try:
