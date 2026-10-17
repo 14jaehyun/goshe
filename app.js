@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.6 */
+/* Goshé. — 고성능 쉐도잉 v1.0.5 */
 'use strict';
-const VERSION='1.0.6';
+const VERSION='1.0.5';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -22,7 +22,7 @@ function toast(t,ms=2200){const d=document.createElement('div');d.className='toa
 /* ---------- 효과음 ---------- */
 let AC=null,OUT=null,MICOPEN=false;
 function ambient(){const s=navigator.audioSession;if(!s)return;try{if(s.type==='ambient')s.type='auto';s.type='ambient';}catch(e){}}
-function audio(){try{if(!AC||AC.state==='closed'){ambient();AC=new(window.AudioContext||window.webkitAudioContext)();OUT=AC.createGain();OUT.gain.value=0.5;OUT.connect(AC.destination);}
+function audio(){try{if(!AC||AC.state==='closed'){ambient();AC=new(window.AudioContext||window.webkitAudioContext)();OUT=AC.createGain();OUT.gain.value=1;OUT.connect(AC.destination);}
   if(AC.state!=='running'&&!document.hidden){const p=AC.resume();if(p&&p.catch)p.catch(()=>{});}}catch(e){}return AC;}
 function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;audio();}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
