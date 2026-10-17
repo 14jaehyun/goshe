@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.6 */
+/* Goshé. — 고성능 쉐도잉 v1.0.7 */
 'use strict';
-const VERSION='1.0.6';
+const VERSION='1.0.7';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -22,7 +22,7 @@ function toast(t,ms=2200){const d=document.createElement('div');d.className='toa
 /* ---------- 효과음 ---------- */
 let AC=null,OUT=null,MICOPEN=false;
 function ambient(){const s=navigator.audioSession;if(!s)return;try{if(s.type==='ambient')s.type='auto';s.type='ambient';}catch(e){}}
-function audio(){try{if(!AC||AC.state==='closed'){ambient();AC=new(window.AudioContext||window.webkitAudioContext)();OUT=AC.createGain();OUT.gain.value=1;OUT.connect(AC.destination);}
+function audio(){try{if(!AC||AC.state==='closed'){ambient();AC=new(window.AudioContext||window.webkitAudioContext)();OUT=AC.createGain();OUT.gain.value=0.5;OUT.connect(AC.destination);}
   if(AC.state!=='running'&&!document.hidden){const p=AC.resume();if(p&&p.catch)p.catch(()=>{});}}catch(e){}return AC;}
 function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;audio();}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
@@ -101,17 +101,32 @@ function playRange(vid,start,end,speed,onEnd){
         if(!PLAY.armed){if(st===1&&t>=PLAY.start-0.6&&t<PLAY.end)PLAY.armed=true;else{if(Date.now()-PLAY.t0>4000&&st!==1){try{YTP.seekTo(Math.max(0,start),true);YTP.playVideo();}catch(e){}PLAY.t0=Date.now();}return;}}
         if(t>=PLAY.end){try{YTP.pauseVideo();}catch(e){}const f=PLAY.onEnd;stopMon();f&&f();}},30);};
     if(curVid!==vid){curVid=vid;try{YTP.loadVideoById({videoId:vid,startSeconds:Math.max(0,start)});}catch(e){}setTimeout(go,350);}else go();});}
-function preview(vid){whenYT(()=>{stopMon();try{YTP.setPlaybackRate(1);}catch(e){}if(curVid!==vid){curVid=vid;YTP.loadVideoById({videoId:vid});}else{YTP.seekTo(0,true);YTP.playVideo();}});}
+function preview(vid){whenYT(()=>{stopMon();try{YTP.setPlaybackRate(1);}catch(e){}let st=-1;try{st=YTP.getPlayerState();}catch(e){}
+  if(curVid!==vid){curVid=vid;YTP.loadVideoById({videoId:vid});}
+  else if(st===1){YTP.pauseVideo();}            /* 재생 중이면 탭으로 멈춤 */
+  else{if(st===0)YTP.seekTo(0,true);YTP.playVideo();}});}
 function pausePlayer(){stopMon();try{YTP&&YTP.pauseVideo();}catch(e){}}
-function cueLearning(){const c=learning();if(!c){return;}whenYT(()=>{if(curVid!==c.vid){stopMon();curVid=c.vid;const s=c.sents?.[c.lastIdx||0];try{YTP.cueVideoById({videoId:c.vid,startSeconds:s?Math.max(0,s.start-PRE):0});}catch(e){}}});}
+/* 탭마다 영상 대기 위치가 다름: 쉐도잉=지금 문장, 스크립트=가운데 문장, 클립=미리보기 멈춘 곳(없으면 처음) */
+let CLIPPOS={vid:'',t:0};
+function standby(vid,t){whenYT(()=>{stopMon();t=Math.max(0,t||0);let st=-1;try{st=YTP.getPlayerState();}catch(e){}
+  if(curVid!==vid||st===5||st===-1){curVid=vid;try{YTP.cueVideoById({videoId:vid,startSeconds:t});}catch(e){}return;}
+  try{YTP.pauseVideo();YTP.seekTo(t,true);}catch(e){}});}
+function standbyFor(tab){const c=learning();
+  if(tab==='pShadow'&&c&&c.sents)standby(c.vid,rangeOf(c,Math.min(c.lastIdx||0,c.sents.length-1))[0]);
+  else if(tab==='pScript'&&c&&c.sents)standby(c.vid,rangeOf(c,Math.min(c.scIdx||0,c.sents.length-1))[0]);
+  else if(tab==='pClip'){if(CLIPPOS.vid)standby(CLIPPOS.vid,CLIPPOS.t);else if(c)standby(c.vid,0);}}
+function cueLearning(){standbyFor(DB.ui.tab);}
 
 /* ---------- 탭·접기·로고 ---------- */
-function setTab(t,sound){if(sound&&DB.ui.tab!==t)SFX.ding();DB.ui.tab=t;save();
+function setTab(t,sound){if(sound&&DB.ui.tab!==t)SFX.ding();
+  if(DB.ui.tab==='pClip'&&t!=='pClip'&&curVid&&YTP){try{CLIPPOS={vid:curVid,t:YTP.getCurrentTime()||0};}catch(e){}}
+  const changed=DB.ui.tab!==t;DB.ui.tab=t;save();
   $$('.page').forEach(p=>p.classList.toggle('on',p.id===t));$$('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   closeWord(true);
-  if(t==='pShadow'){if(curVid&&learning()&&curVid!==learning().vid)pausePlayer();cueLearning();renderShadow(!!sound);}
-  if(t==='pScript'){if(curVid&&learning()&&curVid!==learning().vid)pausePlayer();cueLearning();renderDrum();}
+  if(t==='pShadow')renderShadow(!!sound);
+  if(t==='pScript')renderDrum();
   if(t==='pClip')renderClips();
+  if(changed||!sound)standbyFor(t);
   if(t==='pVocab')renderVocab();
   requestAnimationFrame(layout);}
 $$('.tab').forEach(b=>b.onclick=()=>setTab(b.dataset.t,true));
@@ -209,79 +224,31 @@ function removeClip(c){DB.clips=DB.clips.filter(x=>x!==c);if(DB.learningId===c.i
 let pickFor=null;
 function pickScript(c){pickFor=c;const f=$('#fileIn');f.value='';f.click();}
 $('#fileIn').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];const c=pickFor;pickFor=null;if(!file||!c)return;
-  let text='';try{text=await file.text();}catch(err){toast('파일을 읽지 못했어요');return;}
-  const segs=parseTranscript(text);
-  if(segs.length<1){toast('시간 정보(0:12 같은)가 있는 스크립트가 아니에요');return;}
-  const fv=vidOf(text.split(/\r?\n/).find(l=>/youtu/.test(l))||'');
-  if(fv&&fv!==c.vid){toast('파일 첫 줄 링크가 이 클립과 달라요. 그래도 불러올게요',2600);}
-  await buildScript(c,segs);});
-function tsec(s){const p=s.replace(',','.').split(':').map(Number);if(p.some(isNaN))return NaN;return p.length===3?p[0]*3600+p[1]*60+p[2]:p[0]*60+p[1];}
-function parseTranscript(text){
-  const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/​/g,'').trim());const segs=[];let cur=null;
-  const arrow=/^(\d{1,2}:\d{2}:\d{2}[.,]\d+|\d{1,2}:\d{2}[.,]\d+)\s*-->\s*/;
-  const tsOnly=/^(\d{1,2}:)?\d{1,2}:\d{2}$/;const tsLead=/^((?:\d{1,2}:)?\d{1,2}:\d{2})\s+(.+)$/;
-  /* 유튜브 PC 스크립트 복사본: "0:099초I just…" — 시간 + 읽어주기용 시간(9초, 1분 5초, 12 seconds) + 대사가 붙어서 옴 */
-  const tsGlued=/^((?:\d{1,2}:)?\d{1,2}:\d{2})((?:\d+\s*(?:시간|분|초|hours?|minutes?|seconds?)[\s,]*)*)(.*)$/i;
-  const chapter=/^(챕터|chapter)\s*\d+\s*[:.]/i;
-  const junk=/^(\d+\s*(초|분|시간|seconds?|minutes?|hours?)(,?\s*\d+\s*(초|분|seconds?|minutes?))*|WEBVTT.*|Kind:.*|Language:.*|NOTE.*)$/i;
-  for(let i=0;i<lines.length;i++){const l=lines[i];if(!l)continue;
-    if(/^https?:\/\//.test(l))continue;
-    let m=l.match(arrow);if(m){cur={t:tsec(m[1]),text:''};segs.push(cur);continue;}
-    if(/^\d+$/.test(l)&&lines[i+1]&&arrow.test(lines[i+1]))continue;
-    if(tsOnly.test(l)){cur={t:tsec(l),text:''};segs.push(cur);continue;}
-    m=l.match(tsLead);if(m&&!isNaN(tsec(m[1]))){cur={t:tsec(m[1]),text:m[2]};segs.push(cur);continue;}
-    if(chapter.test(l))continue;
-    m=l.match(tsGlued);if(m&&!isNaN(tsec(m[1]))&&(m[2]||m[3])){cur={t:tsec(m[1]),text:(m[3]||'').trim()};segs.push(cur);continue;}
-    if(junk.test(l))continue;
-    if(cur){cur.text=(cur.text?cur.text+' ':'')+l.replace(/<[^>]+>/g,'');}}
-  return segs.filter(s=>s.text&&!isNaN(s.t)).map(s=>({t:s.t,text:s.text.replace(/\[(music|음악|applause|박수|laughter|웃음)\]/gi,'').replace(/\s+/g,' ').trim()})).filter(s=>s.text);}
-/* 문장 나누기: 스크립트 한 줄 안에서도 화자가 바뀌거나 문장이 끝나면 자른다.
-   줄 시작 시간은 원본 그대로, 줄 안 조각의 시간은 글자 수 비율로 나눔 */
-const wc=t=>t.split(/\s+/).filter(Boolean).length;
-function splitLocal(text){
-  const parts=[];text.split(/(?:^|\s+)-\s+/).forEach(chunk=>{chunk=chunk.trim();if(!chunk)return;
-    const ss=chunk.split(/(?<=[.!?…]["'”’)\]]*)\s+(?=["'“‘(\[]?[A-Z0-9])/).map(x=>x.trim()).filter(Boolean);
-    const merged=[];ss.forEach(x=>{const prev=merged[merged.length-1];if(prev&&(wc(prev)<3||wc(x)<3&&!/[?]$/.test(prev)))merged[merged.length-1]=prev+' '+x;else merged.push(x);});
-    parts.push(...merged);});
-  return parts.length?parts:[text];}
-function sameWords(a,b){const A=canon(a),B=canon(b);if(!A.length)return false;let hit=0;
-  const set=new Map();B.forEach(t=>set.set(t,(set.get(t)||0)+1));A.forEach(t=>{const n=set.get(t);if(n){hit++;set.set(t,n-1);}});
-  return hit/Math.max(A.length,B.length)>=0.9;}
-/* 말 길이는 글자보다 음절에 가까워서 모음 덩어리로 셈 + 문장 사이 쉼 */
-const syl=t=>(t.toLowerCase().match(/[aeiouy]+/g)||[]).length+1;
-function cutTimes(t0,t1,pieces){const L=pieces.map(p=>syl(p.en)+2);const tot=L.reduce((x,y)=>x+y,0);let t=t0;const n=pieces.length;
-  return pieces.map((p,k)=>{const st=t;t=k===n-1?t1:t+(t1-t0)*L[k]/tot;return Object.assign({start:st,end:t,lo:t0,hi:t1,estS:k>0,estE:k<n-1},p);});}
-/* 추정 경계(줄 안에서 자른 곳)는 넉넉히 — 잘리는 것보다 앞뒤 말이 조금 들리는 게 낫다. 원본 줄 경계는 그대로 */
-const EST_PRE=0.7,EST_POST=1.0;
-function rangeOf(s){const a=s.estS?Math.max(s.lo??0,s.start-EST_PRE):s.start-PRE;const b=s.estE?Math.min(s.hi??1e9,s.end+EST_POST):s.end+POST;return [Math.max(0,a),b];}
-async function buildScript(c,segs){
-  const lastEnd=segs[segs.length-1].t+Math.max(3,segs[segs.length-1].text.length*0.075);
-  const pieces=segs.map(s=>splitLocal(s.text).map(en=>({en,ko:''})));
-  const done=()=>{c.busy='';const out=[];segs.forEach((s,i)=>out.push(...cutTimes(s.t,segs[i+1]?segs[i+1].t:lastEnd,pieces[i])));
-    c.sents=out;c.noKo=out.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();return out.length;};
+  let j=null;try{j=JSON.parse(await file.text());}catch(err){}
+  const ok=j&&j.goshe&&Array.isArray(j.sents)&&j.sents.length&&j.sents.every(x=>isFinite(x.start)&&isFinite(x.end)&&x.en);
+  if(!ok){toast('PC에서 만든 .goshe.json 파일을 골라 주세요',2800);return;}
+  const go=()=>loadScript(c,j);
+  if(j.vid&&j.vid!==c.vid)dialog(`이 클립과 다른 영상의 파일이에요<small>${esc(j.title||'')}</small>`,[{label:'취소'},{label:'그래도 불러오기',pri:true,fn:go}]);else go();});
+/* 구간 = Whisper가 잡은 실제 시작·끝 + 앞뒤 여유. 여유는 이웃 문장 안으로는 들어가지 않음 */
+function rangeOf(c,i){const L=c.sents,s=L[i],p=L[i-1],n=L[i+1];
+  const a=Math.max(p?p.end-0.05:0,s.start-PRE,0);const b=Math.min(n?n.start+0.05:1e9,s.end+POST);return [Math.min(a,s.start),Math.max(b,s.end)];}
+async function loadScript(c,j){
+  const sents=j.sents.map(x=>({start:+x.start,end:+x.end,en:String(x.en).trim(),ko:''}));
+  if(j.title&&(!c.title||c.title===c.vid))c.title=j.title;
+  const done=()=>{c.busy='';c.sents=sents;c.noKo=sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
   if(!DB.settings.key.trim()){done();toast('API 키가 없어서 해석 없이 불러왔어요',2800);return;}
-  const CH=40;let failed=0;
-  for(let pos=0;pos<segs.length;pos+=CH){c.busy=`문장 나누는 중… ${Math.min(100,Math.round(pos/segs.length*100))}%`;renderClips();
-    const ch=segs.slice(pos,pos+CH);
-    const prompt=`These are caption lines from an English TV/video clip (often a dialogue). Each line is "<number>: <text>".
-Split EACH line into short shadowing units:
-- Always split where the speaker changes (dialogue turns often have no marker; use context like questions and replies, "You got...? That's amazing!" answering "I got...").
-- Also split at sentence ends. Very short bits (1–2 words like "Guess what?", "Oh, uh..") join the neighboring unit of the SAME speaker.
-- Never move words between lines. Keep the exact words and order; you may drop leading "-" speaker dashes.
-- For each unit give natural conversational Korean "ko".
-Return JSON only: {"lines":{"<number>":[{"en":"...","ko":"..."}], ...}} for every number.
+  const CH=50;let failed=0;
+  for(let pos=0;pos<sents.length;pos+=CH){c.busy=`해석 붙이는 중… ${Math.round(pos/sents.length*100)}%`;renderClips();
+    const ch=sents.slice(pos,pos+CH);
+    const prompt=`These are consecutive lines from an English video (often a dialogue). Translate each line into natural, conversational Korean, using the other lines as context.
+Each line is "<number>: <text>". Return JSON only: {"ko":{"<number>":"<Korean>", ...}} with every number.
 
 Lines:
-${ch.map((s,k)=>`${pos+k}: ${s.text}`).join('\n')}`;
-    try{const t=await gemini([{text:prompt}],'script',{timeout:90000});const j=parseJSON(t);const m=(j&&(j.lines||j))||{};let n=0;
-      ch.forEach((s,k)=>{const i=pos+k;const arr=m[i]??m[String(i)];if(!Array.isArray(arr)||!arr.length)return;
-        const ps=arr.map(u=>({en:String(u&&u.en||'').replace(/^\s*-\s*/,'').trim(),ko:String(u&&u.ko||'').trim()})).filter(u=>u.en);
-        if(ps.length&&sameWords(s.text,ps.map(u=>u.en).join(' '))){pieces[i]=ps;n++;}
-        else if(arr.length===1&&arr[0].ko){pieces[i]=[{en:s.text,ko:String(arr[0].ko)}];}});
-      if(!n)failed++;}
+${ch.map((s,k)=>`${pos+k}: ${s.en}`).join('\n')}`;
+    try{const t=await gemini([{text:prompt}],'script',{timeout:90000});const m=(parseJSON(t)||{});const ko=m.ko||m;let n=0;
+      ch.forEach((s,k)=>{const v=ko[pos+k]??ko[String(pos+k)];if(v){s.ko=String(v).trim();n++;}});if(!n)failed++;}
     catch(e){if(e.message==='nokey'||/키|모델|한도/.test(e.message||'')){done();toast(errMsg(e),3000);return;}failed++;}}
-  const n=done();
-  toast(failed?`${n}문장으로 나눴어요 (일부는 해석 없이)`:`${n}문장으로 나눴어요`,2600);}
+  done();toast(failed?`${sents.length}문장 불러왔어요 (일부는 해석 없이)`:`${sents.length}문장 불러왔어요`,2600);}
 
 /* ---------- 판정: 축약형 같게 보기 ---------- */
 const CONTR={"can't":['can','not'],"cannot":['can','not'],"won't":['will','not'],"shan't":['shall','not'],"ain't":['is','not'],"let's":['let','us'],
@@ -340,7 +307,7 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');drawListen();
   c.lastIdx=SH.idx;save();requestAnimationFrame(layout);
   }
-function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];playRange(c.vid,...rangeOf(s),DB.speed.shadow);}
+function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];playRange(c.vid,...rangeOf(c,SH.idx),DB.speed.shadow);}
 /* 듣기: 문장당 4번(들어갈 때 자동 재생도 1번). 원 3개는 1~3번째 듣기만 표시.
    3번 들을 때까지 다 맞히면 Complete, 4번째 듣고 맞혀도 Incomplete.
    4번 다 듣고 듣기를 또 누르면 = 정답 보기 → Incomplete. 문장이 끝나면 듣기 무제한. 말하기는 제한 없음 */
@@ -477,10 +444,11 @@ function shadeDrum(){const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2;c
     p.style.opacity=op.toFixed(3);p.style.transform=`scaleY(${Math.max(.62,1-dist*.04).toFixed(3)})`;}
   if(ci!==DR.lastCenter){DR.lastCenter=ci;SFX.tick();}}
 $('#drum').addEventListener('scroll',()=>{if(!DR.raf)DR.raf=requestAnimationFrame(()=>{DR.raf=0;shadeDrum();});
-  clearTimeout(DR.settleT);DR.settleT=setTimeout(()=>{if(DR.prog)return;const ci=centerIndex();if(ci!==DR.idx){DR.idx=ci;const c=learning();if(c){c.scIdx=ci;save();}if(DR.user)playDrum();}DR.user=false;},160);},{passive:true});
-$('#drum').addEventListener('touchstart',()=>{DR.user=true;},{passive:true});
+  clearTimeout(DR.settleT);DR.settleT=setTimeout(()=>{if(DR.touch)return;if(DR.prog&&!DR.user)return;const ci=centerIndex();if(ci!==DR.idx){DR.idx=ci;const c=learning();if(c){c.scIdx=ci;save();}if(DR.user)playDrum();}DR.user=false;},160);},{passive:true});
+$('#drum').addEventListener('touchstart',()=>{DR.user=true;DR.prog=false;DR.touch=true;},{passive:true});
+$('#drum').addEventListener('touchend',()=>{DR.touch=false;$('#drum').dispatchEvent(new Event('scroll'));},{passive:true});
 $('#drum').addEventListener('wheel',()=>{DR.user=true;},{passive:true});
-function playDrum(){const c=learning();if(!c)return;const s=c.sents[DR.idx];playRange(c.vid,...rangeOf(s),DB.speed.script);}
+function playDrum(){const c=learning();if(!c)return;const s=c.sents[DR.idx];playRange(c.vid,...rangeOf(c,DR.idx),DB.speed.script);}
 function drumGo(i){const c=learning();if(!c)return;if(i<0){toast('첫 문장이에요');return;}if(i>=c.sents.length){toast('마지막 문장이에요');return;}
   DR.idx=i;c.scIdx=i;save();scrollDrumTo(i,true);playDrum();}
 (()=>{let sx=0,sy=0,t0=0;const d=$('#drum');d.addEventListener('pointerdown',e=>{sx=e.clientX;sy=e.clientY;t0=Date.now();});
