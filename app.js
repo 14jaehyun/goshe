@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.3 */
+/* Goshé. — 고성능 쉐도잉 v1.0.4 */
 'use strict';
-const VERSION='1.0.3';
+const VERSION='1.0.4';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -235,54 +235,26 @@ function parseTranscript(text){
     if(junk.test(l))continue;
     if(cur){cur.text=(cur.text?cur.text+' ':'')+l.replace(/<[^>]+>/g,'');}}
   return segs.filter(s=>s.text&&!isNaN(s.t)).map(s=>({t:s.t,text:s.text.replace(/\[(music|음악|applause|박수|laughter|웃음)\]/gi,'').replace(/\s+/g,' ').trim()})).filter(s=>s.text);}
-/* 줄(유튜브가 준 시작 시간) 경계에서만 묶음을 자른다 — 시간은 추정하지 않고 원본 그대로 */
-const endsSentence=t=>/[.!?…]["'”’)\]]*$/.test(t.trim());
-function localGroups(segs,off){const out=[];let from=0;
-  segs.forEach((s,i)=>{const words=segs.slice(from,i+1).map(x=>x.text).join(' ').split(/\s+/).length;
-    if(endsSentence(s.text)||i===segs.length-1||words>=40){out.push({from:off+from,to:off+i,en:segs.slice(from,i+1).map(x=>x.text).join(' '),ko:''});from=i+1;}});
-  return out;}
-function sameWords(a,b){const A=canon(a),B=canon(b);if(!A.length)return false;let i=0,j=0,hit=0;
-  const set=new Map();B.forEach(t=>set.set(t,(set.get(t)||0)+1));A.forEach(t=>{const n=set.get(t);if(n){hit++;set.set(t,n-1);}});
-  return hit/Math.max(A.length,B.length)>=0.85;}
+/* 자막 한 줄 = 한 문장 — 스크립트에 표시된 자막 표출 단위 그대로 쓴다 (묶지 않음) */
 async function buildScript(c,segs){
   const lastEnd=segs[segs.length-1].t+Math.max(3,segs[segs.length-1].text.length*0.075);
-  const timeOf=g=>({start:segs[g.from].t,end:segs[g.to+1]?segs[g.to+1].t:lastEnd});
-  const done=groups=>{c.busy='';c.sents=groups.map(g=>Object.assign(timeOf(g),{en:g.en,ko:g.ko||''}));c.noKo=c.sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;
-    if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
-  if(!DB.settings.key.trim()){done(localGroups(segs,0));toast('API 키가 없어서 해석 없이 문장만 나눴어요',2800);return;}
-  const CH=60;let pos=0,all=[],failed=0,round=0;
-  while(pos<segs.length){round++;c.busy=`스크립트 정리 중… ${Math.min(100,Math.round(pos/segs.length*100))}%`;renderClips();
-    const ch=segs.slice(pos,pos+CH);const last=pos+ch.length>=segs.length;
-    const listing=ch.map((s,k)=>`${pos+k}: ${s.text}`).join('\n');
-    const prompt=`You are preparing an English shadowing script from YouTube caption lines. Each line is "<line number>: <caption text>".
-Group CONSECUTIVE WHOLE lines into practice units. Rules:
-- Never split a line. A unit is one or more whole lines: "from" and "to" are line numbers (inclusive).
-- Units must cover the lines in order with no gaps and no overlaps, starting at line ${pos}.
-- End a unit at the end of a line where a sentence (or a complete thought) ends. Never cut a sentence into two units.
-- If a line ends in the middle of a sentence, keep adding lines until a line ends where a sentence ends.
-- Only if no sentence ends for a long stretch (more than ~40 words), end the unit at a line that ends at a natural pause.
-- "en": the exact words of those lines joined, with proper punctuation and capitalization added. Do NOT add, remove or change words.
-- "ko": a natural, conversational Korean translation of the unit.
-${last?'':'- The last lines may continue past this chunk; still give your best grouping for them.\n'}Return JSON only: {"units":[{"from":0,"to":1,"en":"...","ko":"..."}]}
+  const ko=new Array(segs.length).fill('');
+  const done=()=>{c.busy='';c.sents=segs.map((s,i)=>({start:s.t,end:segs[i+1]?segs[i+1].t:lastEnd,en:s.text,ko:ko[i]||''}));
+    c.noKo=c.sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
+  if(!DB.settings.key.trim()){done();toast('API 키가 없어서 해석 없이 불러왔어요',2800);return;}
+  const CH=60;let failed=0;
+  for(let pos=0;pos<segs.length;pos+=CH){c.busy=`해석 붙이는 중… ${Math.min(100,Math.round(pos/segs.length*100))}%`;renderClips();
+    const ch=segs.slice(pos,pos+CH);
+    const prompt=`Translate each English caption line into natural, conversational Korean. Use the surrounding lines as context, but translate each line on its own (a line may be part of a longer sentence — translate just that part naturally).
+Each line is "<number>: <text>". Return JSON only: {"ko":{"<number>":"<Korean>", ...}} with every number.
 
 Lines:
-${listing}`;
-    let groups=null;
-    try{const t=await gemini([{text:prompt}],'script',{timeout:60000});const j=parseJSON(t);const arr=(j&&(j.units||j))||[];
-      // 검증: pos부터 빈틈·겹침 없이 이어져야 함
-      let p=pos;const ok=[];for(const u of arr){const f=Number(u&&u.from),to=Number(u&&u.to);if(f!==p||!(to>=f)||to>=pos+ch.length)break;
-        const raw=segs.slice(f,to+1).map(x=>x.text).join(' ');const en=String(u.en||'').trim();
-        ok.push({from:f,to,en:en&&sameWords(raw,en)?en:raw,ko:String(u.ko||'').trim()});p=to+1;}
-      if(ok.length)groups=ok;}
-    catch(e){if(e.message==='nokey'||/키|모델|한도/.test(e.message||'')){c.busy='';renderClips();toast(errMsg(e),3000);return;}}
-    if(!groups){failed++;groups=localGroups(ch,pos);}
-    const coveredTo=groups[groups.length-1].to;
-    // 묶음 경계에 걸친 마지막 덩어리는 버리고 다음 묶음에서 앞뒤 문맥과 함께 다시 정리
-    if(!last&&groups.length>1){const tail=groups.pop();all=all.concat(groups);pos=tail.from;}
-    else{all=all.concat(groups);pos=coveredTo+1;}
-    if(round>500)break;}
-  done(all);
-  toast(failed?`스크립트를 불러왔어요 (일부 구간은 해석 없이)`:`${all.length}문장으로 정리했어요`,2600);}
+${ch.map((s,k)=>`${pos+k}: ${s.text}`).join('\n')}`;
+    try{const t=await gemini([{text:prompt}],'script',{timeout:60000});const j=parseJSON(t);const m=(j&&(j.ko||j))||{};let n=0;
+      ch.forEach((s,k)=>{const v=m[pos+k]??m[String(pos+k)];if(v){ko[pos+k]=String(v).trim();n++;}});if(!n)failed++;}
+    catch(e){if(e.message==='nokey'||/키|모델|한도/.test(e.message||'')){done();toast(errMsg(e),3000);return;}failed++;}}
+  done();
+  toast(failed?`${segs.length}줄 불러왔어요 (일부는 해석 없이)`:`${segs.length}줄로 불러왔어요`,2600);}
 
 /* ---------- 판정: 축약형 같게 보기 ---------- */
 const CONTR={"can't":['can','not'],"cannot":['can','not'],"won't":['will','not'],"shan't":['shall','not'],"ain't":['is','not'],"let's":['let','us'],
