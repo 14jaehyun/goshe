@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.9 */
+/* Goshé. — 고성능 쉐도잉 v1.0.10 */
 'use strict';
-const VERSION='1.0.9';
+const VERSION='1.0.10';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -302,13 +302,11 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   killRec();SH.listens=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.words=s.en.split(/\s+/).filter(Boolean);
   closeWord(true);
   SH.words.forEach((w,i)=>{if(!canon(w).length||isName(c,w))SH.revealed.add(i);});
-  if(!Array.isArray(c.names)){const at=SH.idx;ensureNames(c).then(ok=>{if(!ok||SH.idx!==at||SH.done||learning()!==c)return;
-    const add=SH.words.map((w,i)=>i).filter(i=>!SH.revealed.has(i)&&isName(c,SH.words[i]));add.forEach(i=>SH.revealed.add(i));revealWords(add);});}
   const sent=$('#shSent');sent.className='sent'+(s.en.length>140?' s3':s.en.length>90?' s2':'');
   sent.innerHTML=SH.words.map((w,i)=>`<span class="w${SH.revealed.has(i)?' r':''}" data-i="${i}"><span class="t">${esc(w)}</span><span class="u"></span></span>`).join('');
   $('#shKo').textContent=s.ko||'';$('#shKo').classList.remove('on');
   $$('.dot').forEach(d=>d.classList.remove('f'));
-  const st=$('#stamp');st.getAnimations().forEach(a=>a.cancel());st.style.opacity=0;
+  const st=$('#stamp');st.getAnimations().forEach(a=>a.cancel());st.style.opacity=0;st.style.display='none';
   $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');drawListen();
   c.lastIdx=SH.idx;save();requestAnimationFrame(layout);
   }
@@ -390,7 +388,7 @@ async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done'
   await sleep(rest.length*50+300);
   if($('#shKo').textContent)$('#shKo').classList.add('on');
   await sleep(350);
-  const st=$('#stamp');st.textContent=ok?'Complete':'Incomplete';
+  const st=$('#stamp');st.style.display='';st.textContent=ok?'Complete':'Incomplete';
   st.animate([{opacity:0,transform:'rotate(-30deg) scale(2.4)'},{opacity:.48,transform:'rotate(-30deg) scale(.92)',offset:.62},{opacity:.45,transform:'rotate(-30deg) scale(1.04)',offset:.82},{opacity:.44,transform:'rotate(-30deg) scale(1)'}],
     {duration:280,easing:'cubic-bezier(.55,0,.9,.45)',fill:'forwards'});
   setTimeout(()=>{ok?SFX.ok():SFX.ng();setMic('arrow');},175);
@@ -500,7 +498,9 @@ function usageHTML(){const U=DB.usage;const ks=Object.keys(USAGE_TAGS);const f=n
   const won=r=>{if(!P)return '-';const w=((r&&r.inp||0)*P[0]+(r&&r.out||0)*P[1])/1e6*KRW;return w<1&&w>0?'1원 미만':'약 '+Math.round(w).toLocaleString('ko-KR')+'원';};
   const row=(name,r,cls)=>`<tr${cls?` class="${cls}"`:''}><td>${name}</td><td>${f(r&&r.n)}</td><td>${f(r&&r.inp)}</td><td>${f(r&&r.out)}</td><td>${won(r)}</td></tr>`;
   return `<table class="usage"><tr><th>기능</th><th>호출</th><th>입력</th><th>출력</th><th>추정</th></tr>${ks.map(k=>row(USAGE_TAGS[k],U.rows[k])).join('')}${row('합계',T,'tot')}</table>
-  <div class="small" style="margin-top:6px">${new Date(U.since).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}부터</div>`;}
+  <div class="small ureset" style="margin-top:6px">${new Date(U.since).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}부터<button id="uReset">초기화</button></div>`;}
+document.addEventListener('click',e=>{if(!e.target.closest('#uReset'))return;SFX.tok();
+  dialog('토큰 사용량을 초기화할까요?<small>지금부터 다시 0부터 세요</small>',[{label:'취소'},{label:'초기화',pri:true,fn:()=>{DB.usage={since:Date.now(),rows:{}};save();$('#usage').innerHTML=usageHTML();}}]);});
 function openSettings(){SFX.tok();$('#sKey').value=DB.settings.key;$('#sModel').value=DB.settings.model;$('#usage').innerHTML=usageHTML();$('#sheet').classList.remove('hidden');}
 function closeSettings(){$('#sheet').classList.add('hidden');}
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSettings();});

@@ -25,9 +25,9 @@ body.folded #fold{top:-1px}
 body.folded #fold i{border-bottom:none;border-top:6px solid #8a97a6}
 
 /* 로고 */
-#logo{position:relative;height:30px;font-size:23px;font-weight:800;font-style:italic;letter-spacing:-.01em;white-space:nowrap}
+#logo{position:relative;flex:none;box-sizing:border-box;width:calc((100% + 40px) * 2 / 3);height:52px;margin-left:-20px;padding-left:20px;font-size:23px;font-weight:800;font-style:italic;letter-spacing:-.01em;white-space:nowrap}
 #logo .n{color:var(--navy)}
-#logo .lA,#logo .lB{position:absolute;left:0;top:0;line-height:30px;transition:opacity .12s ease,letter-spacing .22s ease,transform .22s ease;transform-origin:left center}
+#logo .lA,#logo .lB{position:absolute;left:20px;top:11px;line-height:30px;transition:opacity .12s ease,letter-spacing .22s ease,transform .22s ease;transform-origin:left center}
 #logo .lB{opacity:0;letter-spacing:-.12em;transform:scaleX(.7)}
 #logo.on .lA{opacity:0;letter-spacing:.15em}
 #logo.on .lB{opacity:1;letter-spacing:-.01em;transform:none}
@@ -77,7 +77,7 @@ body.folded #fold i{border-bottom:none;border-top:6px solid #8a97a6}
 .dot{width:13px;height:13px;border-radius:50%;border:1.5px solid #c9d3dd;position:relative;overflow:hidden;flex:none}
 .dot i{position:absolute;inset:-1px;background:var(--mint-dot);border-radius:50%;transform:scale(0);transition:transform .22s ease-out}
 .dot.f i{transform:scale(1)}
-.dot.f{border-color:transparent}
+.dot.f{border-color:var(--mint-dot)}
 .top em{margin-left:auto;font-style:normal;font-size:11px;color:var(--faint)}
 .trz{height:78px;margin:6px 0 6px;position:relative;display:flex;align-items:center}
 .ko{font-size:15px;font-weight:600;color:var(--ink);line-height:1.5;opacity:0;transition:opacity .3s}
@@ -103,8 +103,9 @@ body.folded #fold i{border-bottom:none;border-top:6px solid #8a97a6}
 .w.hl+.w.hl{box-shadow:-.3em 0 0 var(--mint-bg),4px 0 0 var(--mint-bg)}
 .spd{display:flex;justify-content:flex-end;margin-top:16px}
 .speed{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:max-content}
-.speed button{width:40px;height:34px;display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--sub)}
-.speed .v{width:58px;font-size:14px;font-weight:600;color:#a7b3c0;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.speed button{width:40px;height:34px;display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--sub);padding:0}
+.speed button svg{display:block}
+.speed .v{width:58px;line-height:1;font-variant-numeric:tabular-nums;font-size:14px;font-weight:600;color:#a7b3c0;border-left:1px solid var(--line);border-right:1px solid var(--line)}
 .stampzone{position:absolute;left:0;right:0;height:100px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:1}
 .stamp{font-size:27px;font-weight:900;letter-spacing:.04em;color:#8fd4b1;border:3.5px solid #8fd4b1;border-radius:12px;padding:2px 16px;transform:rotate(-30deg);opacity:0;text-transform:uppercase;white-space:nowrap}
 .micwrap{position:absolute;left:0;right:0;bottom:24px;display:flex;justify-content:center;align-items:center}
@@ -155,8 +156,10 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 
 /* 설정 시트 */
 #sheet{position:fixed;inset:0;z-index:50;background:rgba(15,21,29,.35);display:flex;align-items:flex-end;justify-content:center}
-.sheetin{background:#fff;width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:14px 20px calc(30px + var(--safe-b));max-height:85vh;overflow-y:auto;animation:up .25s ease-out}
-@keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
+.sheetin{background:#fff;width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:14px 20px calc(30px + var(--safe-b));max-height:85vh;overflow-y:auto;animation:up 1s cubic-bezier(.22,.8,.24,1)}
+@keyframes up{from{transform:translateY(100%)}to{transform:none}}
+#sheet:not(.hidden){animation:dim 1s ease-out}
+@keyframes dim{from{background:rgba(15,21,29,0)}}
 .grab{width:38px;height:5px;border-radius:3px;background:#d3dbe3;margin:0 auto 14px}
 .sh{font-size:19px;font-weight:800;margin-bottom:6px}
 .fl{font-size:12px;color:var(--sub);font-weight:600;margin:14px 0 6px}
@@ -169,6 +172,8 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 .usage td{text-align:right;padding:8px 2px;border-bottom:1px solid var(--line)}
 .usage tr.tot td{font-weight:700;border-bottom:none}
 .small{font-size:12px;color:var(--faint)}
+.ureset{display:flex;align-items:center;justify-content:space-between}
+#uReset{font-size:12px;font-weight:600;color:var(--sub);padding:4px 10px;border:1px solid var(--line);border-radius:8px}
 .ver{font-size:11px;color:var(--faint);text-align:center;margin-top:18px}
 
 /* 확인창 */
