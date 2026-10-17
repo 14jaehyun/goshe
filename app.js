@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.5 */
+/* Goshé. — 고성능 쉐도잉 v1.0.6 */
 'use strict';
-const VERSION='1.0.5';
+const VERSION='1.0.6';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -247,8 +247,13 @@ function splitLocal(text){
 function sameWords(a,b){const A=canon(a),B=canon(b);if(!A.length)return false;let hit=0;
   const set=new Map();B.forEach(t=>set.set(t,(set.get(t)||0)+1));A.forEach(t=>{const n=set.get(t);if(n){hit++;set.set(t,n-1);}});
   return hit/Math.max(A.length,B.length)>=0.9;}
-function cutTimes(t0,t1,pieces){const L=pieces.map(p=>p.en.replace(/\s+/g,'').length+4);const tot=L.reduce((x,y)=>x+y,0);let t=t0;
-  return pieces.map((p,k)=>{const st=t;t=k===pieces.length-1?t1:t+(t1-t0)*L[k]/tot;return Object.assign({start:st,end:t},p);});}
+/* 말 길이는 글자보다 음절에 가까워서 모음 덩어리로 셈 + 문장 사이 쉼 */
+const syl=t=>(t.toLowerCase().match(/[aeiouy]+/g)||[]).length+1;
+function cutTimes(t0,t1,pieces){const L=pieces.map(p=>syl(p.en)+2);const tot=L.reduce((x,y)=>x+y,0);let t=t0;const n=pieces.length;
+  return pieces.map((p,k)=>{const st=t;t=k===n-1?t1:t+(t1-t0)*L[k]/tot;return Object.assign({start:st,end:t,lo:t0,hi:t1,estS:k>0,estE:k<n-1},p);});}
+/* 추정 경계(줄 안에서 자른 곳)는 넉넉히 — 잘리는 것보다 앞뒤 말이 조금 들리는 게 낫다. 원본 줄 경계는 그대로 */
+const EST_PRE=0.7,EST_POST=1.0;
+function rangeOf(s){const a=s.estS?Math.max(s.lo??0,s.start-EST_PRE):s.start-PRE;const b=s.estE?Math.min(s.hi??1e9,s.end+EST_POST):s.end+POST;return [Math.max(0,a),b];}
 async function buildScript(c,segs){
   const lastEnd=segs[segs.length-1].t+Math.max(3,segs[segs.length-1].text.length*0.075);
   const pieces=segs.map(s=>splitLocal(s.text).map(en=>({en,ko:''})));
@@ -335,7 +340,7 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');drawListen();
   c.lastIdx=SH.idx;save();requestAnimationFrame(layout);
   }
-function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];playRange(c.vid,s.start-PRE,s.end+POST,DB.speed.shadow);}
+function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];playRange(c.vid,...rangeOf(s),DB.speed.shadow);}
 /* 듣기: 문장당 4번(들어갈 때 자동 재생도 1번). 원 3개는 1~3번째 듣기만 표시.
    3번 들을 때까지 다 맞히면 Complete, 4번째 듣고 맞혀도 Incomplete.
    4번 다 듣고 듣기를 또 누르면 = 정답 보기 → Incomplete. 문장이 끝나면 듣기 무제한. 말하기는 제한 없음 */
@@ -475,7 +480,7 @@ $('#drum').addEventListener('scroll',()=>{if(!DR.raf)DR.raf=requestAnimationFram
   clearTimeout(DR.settleT);DR.settleT=setTimeout(()=>{if(DR.prog)return;const ci=centerIndex();if(ci!==DR.idx){DR.idx=ci;const c=learning();if(c){c.scIdx=ci;save();}if(DR.user)playDrum();}DR.user=false;},160);},{passive:true});
 $('#drum').addEventListener('touchstart',()=>{DR.user=true;},{passive:true});
 $('#drum').addEventListener('wheel',()=>{DR.user=true;},{passive:true});
-function playDrum(){const c=learning();if(!c)return;const s=c.sents[DR.idx];playRange(c.vid,s.start-PRE,s.end+POST,DB.speed.script);}
+function playDrum(){const c=learning();if(!c)return;const s=c.sents[DR.idx];playRange(c.vid,...rangeOf(s),DB.speed.script);}
 function drumGo(i){const c=learning();if(!c)return;if(i<0){toast('첫 문장이에요');return;}if(i>=c.sents.length){toast('마지막 문장이에요');return;}
   DR.idx=i;c.scIdx=i;save();scrollDrumTo(i,true);playDrum();}
 (()=>{let sx=0,sy=0,t0=0;const d=$('#drum');d.addEventListener('pointerdown',e=>{sx=e.clientX;sy=e.clientY;t0=Date.now();});
