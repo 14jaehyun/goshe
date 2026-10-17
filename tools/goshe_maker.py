@@ -37,6 +37,24 @@ def download(vid, tmp):
         info = y.extract_info("https://www.youtube.com/watch?v=" + vid, download=True)
     return glob.glob(os.path.join(tmp, "a.*"))[0], info.get("title") or vid
 
+def load_audio(path):
+    """오디오를 직접 16kHz 모노로 풀어서 넘김 (faster-whisper의 PyAV 호출을 거치지 않음)"""
+    import av, numpy as np
+    out = []
+    with av.open(path) as c:
+        st = c.streams.audio[0]
+        rs = av.AudioResampler(format="s16", layout="mono", rate=16000)
+        def put(frames):
+            if frames is None: return
+            if not isinstance(frames, list): frames = [frames]
+            for f in frames: out.append(f.to_ndarray().reshape(-1))
+        for fr in c.decode(st):
+            fr.pts = None
+            put(rs.resample(fr))
+        try: put(rs.resample(None))
+        except Exception: pass
+    return np.concatenate(out).astype(np.float32) / 32768.0
+
 def group(words):
     """단어(시간 포함) → 문장. 문장부호로 끊고, 말이 오래 끊기면 끊고, 너무 길면 쉼표/틈에서 끊음"""
     out, cur = [], []
@@ -76,7 +94,7 @@ def make(link):
         global _model
         if "_model" not in globals():
             _model = WhisperModel(MODEL, device="cpu", compute_type="int8")
-        segs, _ = _model.transcribe(path, language="en", word_timestamps=True, vad_filter=True,
+        segs, _ = _model.transcribe(load_audio(path), language="en", word_timestamps=True, vad_filter=True,
                                     condition_on_previous_text=False)
         words = []
         for s in segs:
