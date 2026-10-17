@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.7 */
+/* Goshé. — 고성능 쉐도잉 v1.0.8 */
 'use strict';
-const VERSION='1.0.7';
+const VERSION='1.0.8';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -22,7 +22,7 @@ function toast(t,ms=2200){const d=document.createElement('div');d.className='toa
 /* ---------- 효과음 ---------- */
 let AC=null,OUT=null,MICOPEN=false;
 function ambient(){const s=navigator.audioSession;if(!s)return;try{if(s.type==='ambient')s.type='auto';s.type='ambient';}catch(e){}}
-function audio(){try{if(!AC||AC.state==='closed'){ambient();AC=new(window.AudioContext||window.webkitAudioContext)();OUT=AC.createGain();OUT.gain.value=0.5;OUT.connect(AC.destination);}
+function audio(){try{if(!AC||AC.state==='closed'){ambient();AC=new(window.AudioContext||window.webkitAudioContext)();OUT=AC.createGain();OUT.gain.value=0.05;OUT.connect(AC.destination);}
   if(AC.state!=='running'&&!document.hidden){const p=AC.resume();if(p&&p.catch)p.catch(()=>{});}}catch(e){}return AC;}
 function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;audio();}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
@@ -54,6 +54,8 @@ document.addEventListener('pointerdown',()=>audio(),{capture:true,passive:true})
 document.addEventListener('visibilitychange',()=>{if(document.hidden){try{AC&&AC.suspend();}catch(e){}}});
 
 /* ---------- 제미나이 ---------- */
+/* 추정 가격: 100만 토큰당 달러 [입력, 출력] — Gemini API 유료 등급 기준 (2026-10) */
+const PRICE={'gemini-3.5-flash-lite':[0.30,2.50],'gemini-3.1-flash-lite':[0.25,1.50],'gemini-3.6-flash':[0.75,3.75],'gemini-3.8-flash':[0.75,3.75]};const KRW=1400;
 const USAGE_TAGS={script:'스크립트 정리·해석',judge:'말하기 판정',word:'단어 뜻'};
 function logUsage(tag,u){if(!u)return;const r=DB.usage.rows[tag]||(DB.usage.rows[tag]={n:0,inp:0,out:0});r.n++;r.inp+=u.promptTokenCount||0;r.out+=(u.candidatesTokenCount||0)+(u.thoughtsTokenCount||0);save();}
 async function post(url,body,ms){const ac=new AbortController();const to=setTimeout(()=>ac.abort(),ms);
@@ -289,6 +291,7 @@ const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" str
   stop:'<svg width="28" height="28" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="#fff"/></svg>',
   arrow:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   wait:'<span class="busy"></span><span class="busy"></span><span class="busy"></span>',
+  cry:'<svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><path d="M20 26h8M36 26h8M25 40h14"/></svg>',
   speaker:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.5a7.5 7.5 0 0 1 0 11"/></svg>'};
 function setMic(k){const b=$('#micBtn');b.innerHTML=ICON[k];b.disabled=(k==='wait');}
 function renderShadow(play){const c=learning();const msg=$('#shMsg');
@@ -311,7 +314,7 @@ function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];
 /* 듣기: 문장당 4번(들어갈 때 자동 재생도 1번). 원 3개는 1~3번째 듣기만 표시.
    3번 들을 때까지 다 맞히면 Complete, 4번째 듣고 맞혀도 Incomplete.
    4번 다 듣고 듣기를 또 누르면 = 정답 보기 → Incomplete. 문장이 끝나면 듣기 무제한. 말하기는 제한 없음 */
-function drawListen(){$$('.dot').forEach((d,i)=>d.classList.toggle('f',i<Math.min(3,SH.listens)));$('#listenBtn').innerHTML=ICON.speaker;}
+function drawListen(){$$('.dot').forEach((d,i)=>d.classList.toggle('f',i<Math.min(3,SH.listens)));const sad=!SH.done&&SH.listens>=4;$('#listenBtn').classList.toggle('sad',sad);$('#listenBtn').innerHTML=sad?ICON.cry:ICON.speaker;}
 function listen(auto){if(SH.phase==='rec'||SH.phase==='wait')return;
   if(!SH.done&&SH.listens>=4){if(auto)return;SFX.tok();finishSentence(false);return;}
   if(!auto)SFX.tok();if(!SH.done)SH.listens++;drawListen();playSentence();}
@@ -373,12 +376,6 @@ async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done'
   setTimeout(()=>{ok?SFX.ok():SFX.ng();setMic('arrow');},175);
   const c=learning();if(c){c.res=c.res||{};c.res[SH.idx]=ok?1:0;save();}}
 $('#micBtn').onclick=()=>{if(SH.phase==='idle')startRec();else if(SH.phase==='rec'){SFX.tok();stopRec();}else if(SH.phase==='done'){SFX.tok();gotoSentence(1);}};
-$('#resetBtn').onclick=()=>{killRec();MICOPEN=false;try{const s=navigator.audioSession;if(s){s.type='auto';}}catch(e){}ambient();rebuildAudio();SFX.tok();
-  if(YTP&&curVid){let t=0;try{t=YTP.getCurrentTime();}catch(e){}const v=curVid;try{YTP.destroy();}catch(e){}YTP=null;ytReady=false;curVid='';
-    $$('#video iframe').forEach(f=>f.remove());if(!$('#player'))$('#video').insertAdjacentHTML('afterbegin','<div id="player"></div>');
-    whenYT(()=>{curVid=v;try{YTP.cueVideoById({videoId:v,startSeconds:t});}catch(e){}});}
-  if(SH.phase==='rec'||SH.phase==='wait'){SH.phase='idle';setMic('mic');}
-  toast('소리를 다시 연결했어요');};
 /* 문장 영역: 탭 = 다시 듣기, 좌우 밀기 = 이전/다음, 단어 꾹 = 뜻 */
 (()=>{const sh=$('#shad');let lw=null;
   gesture(sh,{
@@ -442,7 +439,7 @@ function shadeDrum(){const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2;c
   for(let i=Math.max(0,ci-25);i<Math.min(ps.length,ci+26);i++){const p=ps[i];const c=p.offsetTop+p.offsetHeight/2;const dist=Math.abs(c-mid)/24;
     const k=Math.min(OPS.length-1,dist);const lo=Math.floor(k),fr=k-lo;const op=OPS[lo]+(OPS[Math.min(OPS.length-1,lo+1)]-OPS[lo])*fr;
     p.style.opacity=op.toFixed(3);p.style.transform=`scaleY(${Math.max(.62,1-dist*.04).toFixed(3)})`;}
-  if(ci!==DR.lastCenter){DR.lastCenter=ci;SFX.tick();}}
+  if(ci!==DR.lastCenter){DR.lastCenter=ci;if(DR.user)SFX.tick();}   /* 손으로 돌릴 때만 틱 (탭 전환·영상 접기로 칸 크기가 바뀔 땐 조용히) */}
 $('#drum').addEventListener('scroll',()=>{if(!DR.raf)DR.raf=requestAnimationFrame(()=>{DR.raf=0;shadeDrum();});
   clearTimeout(DR.settleT);DR.settleT=setTimeout(()=>{if(DR.touch)return;if(DR.prog&&!DR.user)return;const ci=centerIndex();if(ci!==DR.idx){DR.idx=ci;const c=learning();if(c){c.scIdx=ci;save();}if(DR.user)playDrum();}DR.user=false;},160);},{passive:true});
 $('#drum').addEventListener('touchstart',()=>{DR.user=true;DR.prog=false;DR.touch=true;},{passive:true});
@@ -467,7 +464,7 @@ function renderVocab(){const q=$('#vSearch').value.trim().toLowerCase();const li
   const box=$('#vList');applyVmode();
   if(!DB.vocab.length){box.innerHTML='<div class="vempty">쉐도잉 탭에서 단어를 꾹 누르고<br><b>저장</b>하면 여기에 모여요</div>';return;}
   if(!list.length){box.innerHTML='<div class="vempty">찾는 단어가 없어요</div>';return;}
-  box.innerHTML=list.map(v=>`<div class="v" data-en="${esc(v.en)}"><div class="under del">삭제</div><div class="face"><span class="en">${esc(v.en)}</span><span class="ko">${esc(v.ko)}</span></div></div>`).join('');
+  box.innerHTML=list.map(v=>`<div class="v" data-en="${esc(v.en)}"><div class="under del">삭제</div><div class="face"><span class="ko">${esc(v.ko)}</span><span class="en">${esc(v.en)}</span></div></div>`).join('');
   $$('#vList .v').forEach(el=>{const face=el.querySelector('.face'),del=el.querySelector('.del');
     const peek=()=>el.classList.add('peek'),unpeek=()=>el.classList.remove('peek');
     el.addEventListener('pointerdown',peek);['pointerup','pointercancel','pointerleave'].forEach(t=>el.addEventListener(t,unpeek));
@@ -479,8 +476,10 @@ $('#vSearch').addEventListener('input',renderVocab);
 /* ---------- 설정 ---------- */
 function usageHTML(){const U=DB.usage;const ks=Object.keys(USAGE_TAGS);const f=n=>(n||0).toLocaleString('ko-KR');
   const T={n:0,inp:0,out:0};ks.forEach(k=>{const r=U.rows[k];if(r)for(const x in T)T[x]+=r[x]||0;});
-  const row=(name,r,cls)=>`<tr${cls?` class="${cls}"`:''}><td>${name}</td><td>${f(r&&r.n)}</td><td>${f(r&&r.inp)}</td><td>${f(r&&r.out)}</td></tr>`;
-  return `<table class="usage"><tr><th>기능</th><th>호출</th><th>입력</th><th>출력</th></tr>${ks.map(k=>row(USAGE_TAGS[k],U.rows[k])).join('')}${row('합계',T,'tot')}</table>
+  const P=PRICE[String(DB.settings.model||'').trim().toLowerCase()];
+  const won=r=>{if(!P)return '-';const w=((r&&r.inp||0)*P[0]+(r&&r.out||0)*P[1])/1e6*KRW;return w<1&&w>0?'1원 미만':'약 '+Math.round(w).toLocaleString('ko-KR')+'원';};
+  const row=(name,r,cls)=>`<tr${cls?` class="${cls}"`:''}><td>${name}</td><td>${f(r&&r.n)}</td><td>${f(r&&r.inp)}</td><td>${f(r&&r.out)}</td><td>${won(r)}</td></tr>`;
+  return `<table class="usage"><tr><th>기능</th><th>호출</th><th>입력</th><th>출력</th><th>추정</th></tr>${ks.map(k=>row(USAGE_TAGS[k],U.rows[k])).join('')}${row('합계',T,'tot')}</table>
   <div class="small" style="margin-top:6px">${new Date(U.since).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}부터</div>`;}
 function openSettings(){SFX.tok();$('#sKey').value=DB.settings.key;$('#sModel').value=DB.settings.model;$('#usage').innerHTML=usageHTML();$('#sheet').classList.remove('hidden');}
 function closeSettings(){$('#sheet').classList.add('hidden');}
