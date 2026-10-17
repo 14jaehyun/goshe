@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.10 */
+/* Goshé. — 고성능 쉐도잉 v1.0.11 */
 'use strict';
-const VERSION='1.0.10';
+const VERSION='1.0.11';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
