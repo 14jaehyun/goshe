@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.4 */
+/* Goshé. — 고성능 쉐도잉 v1.0.5 */
 'use strict';
-const VERSION='1.0.4';
+const VERSION='1.0.5';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -235,26 +235,48 @@ function parseTranscript(text){
     if(junk.test(l))continue;
     if(cur){cur.text=(cur.text?cur.text+' ':'')+l.replace(/<[^>]+>/g,'');}}
   return segs.filter(s=>s.text&&!isNaN(s.t)).map(s=>({t:s.t,text:s.text.replace(/\[(music|음악|applause|박수|laughter|웃음)\]/gi,'').replace(/\s+/g,' ').trim()})).filter(s=>s.text);}
-/* 자막 한 줄 = 한 문장 — 스크립트에 표시된 자막 표출 단위 그대로 쓴다 (묶지 않음) */
+/* 문장 나누기: 스크립트 한 줄 안에서도 화자가 바뀌거나 문장이 끝나면 자른다.
+   줄 시작 시간은 원본 그대로, 줄 안 조각의 시간은 글자 수 비율로 나눔 */
+const wc=t=>t.split(/\s+/).filter(Boolean).length;
+function splitLocal(text){
+  const parts=[];text.split(/(?:^|\s+)-\s+/).forEach(chunk=>{chunk=chunk.trim();if(!chunk)return;
+    const ss=chunk.split(/(?<=[.!?…]["'”’)\]]*)\s+(?=["'“‘(\[]?[A-Z0-9])/).map(x=>x.trim()).filter(Boolean);
+    const merged=[];ss.forEach(x=>{const prev=merged[merged.length-1];if(prev&&(wc(prev)<3||wc(x)<3&&!/[?]$/.test(prev)))merged[merged.length-1]=prev+' '+x;else merged.push(x);});
+    parts.push(...merged);});
+  return parts.length?parts:[text];}
+function sameWords(a,b){const A=canon(a),B=canon(b);if(!A.length)return false;let hit=0;
+  const set=new Map();B.forEach(t=>set.set(t,(set.get(t)||0)+1));A.forEach(t=>{const n=set.get(t);if(n){hit++;set.set(t,n-1);}});
+  return hit/Math.max(A.length,B.length)>=0.9;}
+function cutTimes(t0,t1,pieces){const L=pieces.map(p=>p.en.replace(/\s+/g,'').length+4);const tot=L.reduce((x,y)=>x+y,0);let t=t0;
+  return pieces.map((p,k)=>{const st=t;t=k===pieces.length-1?t1:t+(t1-t0)*L[k]/tot;return Object.assign({start:st,end:t},p);});}
 async function buildScript(c,segs){
   const lastEnd=segs[segs.length-1].t+Math.max(3,segs[segs.length-1].text.length*0.075);
-  const ko=new Array(segs.length).fill('');
-  const done=()=>{c.busy='';c.sents=segs.map((s,i)=>({start:s.t,end:segs[i+1]?segs[i+1].t:lastEnd,en:s.text,ko:ko[i]||''}));
-    c.noKo=c.sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
+  const pieces=segs.map(s=>splitLocal(s.text).map(en=>({en,ko:''})));
+  const done=()=>{c.busy='';const out=[];segs.forEach((s,i)=>out.push(...cutTimes(s.t,segs[i+1]?segs[i+1].t:lastEnd,pieces[i])));
+    c.sents=out;c.noKo=out.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();return out.length;};
   if(!DB.settings.key.trim()){done();toast('API 키가 없어서 해석 없이 불러왔어요',2800);return;}
-  const CH=60;let failed=0;
-  for(let pos=0;pos<segs.length;pos+=CH){c.busy=`해석 붙이는 중… ${Math.min(100,Math.round(pos/segs.length*100))}%`;renderClips();
+  const CH=40;let failed=0;
+  for(let pos=0;pos<segs.length;pos+=CH){c.busy=`문장 나누는 중… ${Math.min(100,Math.round(pos/segs.length*100))}%`;renderClips();
     const ch=segs.slice(pos,pos+CH);
-    const prompt=`Translate each English caption line into natural, conversational Korean. Use the surrounding lines as context, but translate each line on its own (a line may be part of a longer sentence — translate just that part naturally).
-Each line is "<number>: <text>". Return JSON only: {"ko":{"<number>":"<Korean>", ...}} with every number.
+    const prompt=`These are caption lines from an English TV/video clip (often a dialogue). Each line is "<number>: <text>".
+Split EACH line into short shadowing units:
+- Always split where the speaker changes (dialogue turns often have no marker; use context like questions and replies, "You got...? That's amazing!" answering "I got...").
+- Also split at sentence ends. Very short bits (1–2 words like "Guess what?", "Oh, uh..") join the neighboring unit of the SAME speaker.
+- Never move words between lines. Keep the exact words and order; you may drop leading "-" speaker dashes.
+- For each unit give natural conversational Korean "ko".
+Return JSON only: {"lines":{"<number>":[{"en":"...","ko":"..."}], ...}} for every number.
 
 Lines:
 ${ch.map((s,k)=>`${pos+k}: ${s.text}`).join('\n')}`;
-    try{const t=await gemini([{text:prompt}],'script',{timeout:60000});const j=parseJSON(t);const m=(j&&(j.ko||j))||{};let n=0;
-      ch.forEach((s,k)=>{const v=m[pos+k]??m[String(pos+k)];if(v){ko[pos+k]=String(v).trim();n++;}});if(!n)failed++;}
+    try{const t=await gemini([{text:prompt}],'script',{timeout:90000});const j=parseJSON(t);const m=(j&&(j.lines||j))||{};let n=0;
+      ch.forEach((s,k)=>{const i=pos+k;const arr=m[i]??m[String(i)];if(!Array.isArray(arr)||!arr.length)return;
+        const ps=arr.map(u=>({en:String(u&&u.en||'').replace(/^\s*-\s*/,'').trim(),ko:String(u&&u.ko||'').trim()})).filter(u=>u.en);
+        if(ps.length&&sameWords(s.text,ps.map(u=>u.en).join(' '))){pieces[i]=ps;n++;}
+        else if(arr.length===1&&arr[0].ko){pieces[i]=[{en:s.text,ko:String(arr[0].ko)}];}});
+      if(!n)failed++;}
     catch(e){if(e.message==='nokey'||/키|모델|한도/.test(e.message||'')){done();toast(errMsg(e),3000);return;}failed++;}}
-  done();
-  toast(failed?`${segs.length}줄 불러왔어요 (일부는 해석 없이)`:`${segs.length}줄로 불러왔어요`,2600);}
+  const n=done();
+  toast(failed?`${n}문장으로 나눴어요 (일부는 해석 없이)`:`${n}문장으로 나눴어요`,2600);}
 
 /* ---------- 판정: 축약형 같게 보기 ---------- */
 const CONTR={"can't":['can','not'],"cannot":['can','not'],"won't":['will','not'],"shan't":['shall','not'],"ain't":['is','not'],"let's":['let','us'],
