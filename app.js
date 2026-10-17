@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.12 */
+/* Goshé. — 고성능 쉐도잉 v1.0.13 */
 'use strict';
-const VERSION='1.0.12';
+const VERSION='1.0.13';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -39,6 +39,17 @@ function blipTick(o,t0,vol){const a=AC,s=a.currentTime+t0+0.01;[[1250,1],[1910,.
   g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol*amp*0.26,s+0.002);g.gain.setTargetAtTime(0,s+0.002,0.022);os.connect(g).connect(o);os.start(s);os.stop(s+0.15);});}
 function blipTone(o,f,t0,vol,tau){const a=AC,s=a.currentTime+t0+0.01;[[1,1],[2,.08]].forEach(([r,amp])=>{const os=a.createOscillator(),g=a.createGain();os.type='sine';os.frequency.value=f*r;
   g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol*amp,s+0.006);g.gain.setValueAtTime(vol*amp,s+0.03);g.gain.setTargetAtTime(0,s+0.03,tau);os.connect(g).connect(o);os.start(s);os.stop(s+0.03+tau*7);});}
+/* 종소리: 맑게 길게 울리는 음 하나 (배음 + 긴 꼬리) */
+function bell(o,f0,t0,vol,ring){const a=AC,s=a.currentTime+t0+0.01;
+  [[1,1,ring],[2,.42,ring*.55],[3.01,.18,ring*.35],[4.2,.07,ring*.2]].forEach(([r,amp,dec])=>{const os=a.createOscillator(),g=a.createGain();os.type='sine';os.frequency.value=f0*r;
+    g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol*amp,s+0.004);g.gain.setTargetAtTime(0,s+0.004,dec/3);os.connect(g).connect(o);os.start(s);os.stop(s+dec*2.5);});}
+/* 한 번 듣고 맞혔을 때 — 디리링~ 후보 3개 (sfx.html에서 비교) */
+const PERFECT=[
+  o=>{[1046.5,1318.5,1568,2093].forEach((f,i)=>bell(o,f,i*0.085,i===3?0.26:0.2,i===3?1.1:0.35));},            // 1 · 도미솔도 올라가며 마지막이 길게
+  o=>{[2093,1568,1318.5,1046.5].forEach((f,i)=>bell(o,f,i*0.085,i===3?0.26:0.2,i===3?1.1:0.35));},            // 2 · 반대로 내려오기
+  o=>{[[1318.5,0],[1046.5,0.16],[1568,0.32]].forEach(([f,t],i)=>bell(o,f,t,0.24,i===2?1.2:0.55));},             // 3 · 딩동댕 (미-도-솔)
+];
+let PERFECT_PICK=0;
 /* 음량은 실제 소리 크기를 재서 서로 비슷하게 맞춘 값 */
 const SFX={
   ding(){const o=bus(.15);if(!o)return;tone(o,1318.5,'sine',1,.45);tone(o,2637,'sine',.18,.2);},                 // A · 맑은 딩 — 하단 탭
@@ -48,6 +59,7 @@ const SFX={
     g.gain.exponentialRampToValueAtTime(0.0008,t+0.06);os.connect(g).connect(o);os.start(t);os.stop(t+0.08);},                                     // 딸깍 — 꾹 눌러 팝업
   tick(){const o=bus(1.29);if(!o)return;noise(o,0,0.006,0.5,'highpass',5000);tone(o,3200,'sine',.18,.012);},        // 틱 — 스크립트 드럼
   ok(){const o=bus(.68);if(!o)return;coinHit(o,1390,0,0.2);coinHit(o,1850,0.055,0.22);coinHit(o,2450,0.11,0.3);},  // 성공 = 호감도 ↑
+  perfect(){const o=bus(.25);if(!o)return;PERFECT[PERFECT_PICK](o);},                                               // 한 번 듣고 맞힘 = 디리링~
   ng(){const o=bus(.41);if(!o)return;blipTick(o,0,0.1);blipTone(o,830,0.09,0.27,0.06);},                          // 실패 = 점수 ↓
 };
 document.addEventListener('pointerdown',()=>audio(),{capture:true,passive:true});
@@ -391,7 +403,7 @@ async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done'
   const st=$('#stamp');st.style.display='';st.textContent=ok?'Complete':'Incomplete';
   st.animate([{opacity:0,transform:'rotate(-30deg) scale(2.4)'},{opacity:.48,transform:'rotate(-30deg) scale(.92)',offset:.62},{opacity:.45,transform:'rotate(-30deg) scale(1.04)',offset:.82},{opacity:.44,transform:'rotate(-30deg) scale(1)'}],
     {duration:280,easing:'cubic-bezier(.55,0,.9,.45)',fill:'forwards'});
-  setTimeout(()=>{ok?SFX.ok():SFX.ng();setMic('arrow');},175);
+  const one=ok&&SH.listens<=1;setTimeout(()=>{ok?(one?SFX.perfect():SFX.ok()):SFX.ng();setMic('arrow');},175);
   const c=learning();if(c){c.res=c.res||{};c.res[SH.idx]=ok?1:0;save();}}
 $('#micBtn').onclick=()=>{if(SH.phase==='idle')startRec();else if(SH.phase==='rec'){SFX.tok();stopRec();}else if(SH.phase==='done'){SFX.tok();gotoSentence(1);}};
 /* 문장 영역: 탭 = 다시 듣기, 좌우 밀기 = 이전/다음, 단어 꾹 = 뜻 */

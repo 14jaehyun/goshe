@@ -1,0 +1,35 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goshé. 소리 비교</title><style>
+body{font-family:-apple-system,"Apple SD Gothic Neo",sans-serif;margin:0;padding:28px 20px;color:#1f2a37;background:#fff}
+h1{font-size:20px;font-style:italic;font-weight:800;margin:0 0 6px}p{font-size:13px;color:#6b7a8c;margin:0 0 22px;line-height:1.6}
+button{display:block;width:100%;text-align:left;font:inherit;font-size:15px;font-weight:600;padding:16px 18px;margin-bottom:10px;border:1px solid #e4e9ef;border-radius:12px;background:#fff;color:#1f2a37}
+button small{display:block;font-size:12px;font-weight:400;color:#9aa7b5;margin-top:3px}button:active{background:#eef3f7}
+</style></head><body><h1>Goshé. 소리 비교</h1><p>무음 모드를 끄고 들어보세요.<br>위: 지금 성공 소리 / 아래: 한 번 듣고 맞혔을 때 후보</p>
+<button data-k="ok">지금 성공 · 띠리링<small>듣기 2~3번 만에 맞혔을 때</small></button>
+<button data-k="0">후보 1 · 도미솔도 올라가며 디리링~<small>마지막 음이 길게 울림</small></button>
+<button data-k="1">후보 2 · 반대로 내려오는 디리링~<small>높은 도에서 낮은 도로</small></button>
+<button data-k="2">후보 3 · 딩동댕~<small>미-도-솔, 조금 느리게</small></button>
+<script>
+let AC=null,OUT=null;
+function audio(){if(!AC){AC=new(window.AudioContext||window.webkitAudioContext)();OUT=AC.createGain();OUT.gain.value=.5;OUT.connect(AC.destination);}if(AC.state==='suspended')AC.resume();return AC;}
+function bus(g){audio();const n=AC.createGain();n.gain.value=g;n.connect(OUT);return n;}
+function noise(o,t0,dur,vol,type,f0){const a=AC,n=Math.max(1,Math.floor(a.sampleRate*dur)),b=a.createBuffer(1,n,a.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;
+  const s=a.createBufferSource();s.buffer=b;const g=a.createGain(),f=a.createBiquadFilter();f.type=type;f.frequency.value=f0;const st=a.currentTime+t0+0.005;
+  g.gain.setValueAtTime(0.0001,st);g.gain.linearRampToValueAtTime(vol,st+dur*0.25);g.gain.exponentialRampToValueAtTime(0.0008,st+dur);s.connect(f).connect(g).connect(o);s.start(st);s.stop(st+dur+0.02);}
+function coinHit(o,f0,t0,vol){const a=AC,s=a.currentTime+t0+0.01;
+  [[1,1,0.35],[2.76,0.6,0.22],[5.40,0.4,0.12],[8.93,0.25,0.07],[13.3,0.15,0.04]].forEach(([r,amp,dec])=>{const os=a.createOscillator(),g=a.createGain();os.type='sine';os.frequency.value=f0*r;
+    g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol*amp*0.35,s+0.0015);g.gain.setTargetAtTime(0,s+0.0015,dec);os.connect(g).connect(o);os.start(s);os.stop(s+dec*6);});
+  noise(o,t0+0.01,0.004,vol*0.4,'highpass',3000);}
+/* 종소리: 맑게 길게 울리는 음 하나 (배음 + 긴 꼬리) */
+function bell(o,f0,t0,vol,ring){const a=AC,s=a.currentTime+t0+0.01;
+  [[1,1,ring],[2,.42,ring*.55],[3.01,.18,ring*.35],[4.2,.07,ring*.2]].forEach(([r,amp,dec])=>{const os=a.createOscillator(),g=a.createGain();os.type='sine';os.frequency.value=f0*r;
+    g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol*amp,s+0.004);g.gain.setTargetAtTime(0,s+0.004,dec/3);os.connect(g).connect(o);os.start(s);os.stop(s+dec*2.5);});}
+/* 한 번 듣고 맞혔을 때 — 디리링~ 후보 3개 (sfx.html에서 비교) */
+const PERFECT=[
+  o=>{[1046.5,1318.5,1568,2093].forEach((f,i)=>bell(o,f,i*0.085,i===3?0.26:0.2,i===3?1.1:0.35));},            // 1 · 도미솔도 올라가며 마지막이 길게
+  o=>{[2093,1568,1318.5,1046.5].forEach((f,i)=>bell(o,f,i*0.085,i===3?0.26:0.2,i===3?1.1:0.35));},            // 2 · 반대로 내려오기
+  o=>{[[1318.5,0],[1046.5,0.16],[1568,0.32]].forEach(([f,t],i)=>bell(o,f,t,0.24,i===2?1.2:0.55));},             // 3 · 딩동댕 (미-도-솔)
+];
+
+document.querySelectorAll('button').forEach(b=>b.onclick=()=>{const k=b.dataset.k;if(k==='ok'){const o=bus(.68);coinHit(o,1390,0,0.2);coinHit(o,1850,0.055,0.22);coinHit(o,2450,0.11,0.3);}else PERFECT[+k](bus(.25));});
+</script></body></html>
