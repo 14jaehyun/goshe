@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.0 */
+/* Goshé. — 고성능 쉐도잉 v1.0.1 */
 'use strict';
-const VERSION='1.0.0';
+const VERSION='1.0.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -106,7 +106,7 @@ function cueLearning(){const c=learning();if(!c){return;}whenYT(()=>{if(curVid!=
 function setTab(t,sound){if(sound&&DB.ui.tab!==t)SFX.ding();DB.ui.tab=t;save();
   $$('.page').forEach(p=>p.classList.toggle('on',p.id===t));$$('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   closeWord(true);
-  if(t==='pShadow'){if(curVid&&learning()&&curVid!==learning().vid)pausePlayer();cueLearning();renderShadow();}
+  if(t==='pShadow'){if(curVid&&learning()&&curVid!==learning().vid)pausePlayer();cueLearning();renderShadow(!!sound);}
   if(t==='pScript'){if(curVid&&learning()&&curVid!==learning().vid)pausePlayer();cueLearning();renderDrum();}
   if(t==='pClip')renderClips();
   if(t==='pVocab')renderVocab();
@@ -208,6 +208,9 @@ function parseTranscript(text){
   const lines=text.replace(/\r/g,'').split('\n').map(l=>l.replace(/​/g,'').trim());const segs=[];let cur=null;
   const arrow=/^(\d{1,2}:\d{2}:\d{2}[.,]\d+|\d{1,2}:\d{2}[.,]\d+)\s*-->\s*/;
   const tsOnly=/^(\d{1,2}:)?\d{1,2}:\d{2}$/;const tsLead=/^((?:\d{1,2}:)?\d{1,2}:\d{2})\s+(.+)$/;
+  /* 유튜브 PC 스크립트 복사본: "0:099초I just…" — 시간 + 읽어주기용 시간(9초, 1분 5초, 12 seconds) + 대사가 붙어서 옴 */
+  const tsGlued=/^((?:\d{1,2}:)?\d{1,2}:\d{2})((?:\d+\s*(?:시간|분|초|hours?|minutes?|seconds?)[\s,]*)*)(.*)$/i;
+  const chapter=/^(챕터|chapter)\s*\d+\s*[:.]/i;
   const junk=/^(\d+\s*(초|분|시간|seconds?|minutes?|hours?)(,?\s*\d+\s*(초|분|seconds?|minutes?))*|WEBVTT.*|Kind:.*|Language:.*|NOTE.*)$/i;
   for(let i=0;i<lines.length;i++){const l=lines[i];if(!l)continue;
     if(/^https?:\/\//.test(l))continue;
@@ -215,6 +218,8 @@ function parseTranscript(text){
     if(/^\d+$/.test(l)&&lines[i+1]&&arrow.test(lines[i+1]))continue;
     if(tsOnly.test(l)){cur={t:tsec(l),text:''};segs.push(cur);continue;}
     m=l.match(tsLead);if(m&&!isNaN(tsec(m[1]))){cur={t:tsec(m[1]),text:m[2]};segs.push(cur);continue;}
+    if(chapter.test(l))continue;
+    m=l.match(tsGlued);if(m&&!isNaN(tsec(m[1]))&&(m[2]||m[3])){cur={t:tsec(m[1]),text:(m[3]||'').trim()};segs.push(cur);continue;}
     if(junk.test(l))continue;
     if(cur){cur.text=(cur.text?cur.text+' ':'')+l.replace(/<[^>]+>/g,'');}}
   return segs.filter(s=>s.text&&!isNaN(s.t)).map(s=>({t:s.t,text:s.text.replace(/\[(music|음악|applause|박수|laughter|웃음)\]/gi,'').replace(/\s+/g,' ').trim()})).filter(s=>s.text);}
@@ -292,18 +297,19 @@ function matchWords(words,said){const tt=[],owner=[];words.forEach((w,i)=>canon(
   const got=new Set();words.forEach((w,wi)=>{const ks=need.get(wi);if(!ks||ks.every(k=>hit.has(k)))got.add(wi);});return got;}
 
 /* ---------- ② 쉐도잉 ---------- */
-const SH={idx:0,attempts:0,revealed:new Set(),done:false,phase:'idle',words:[]};   // phase: idle | rec | wait | done
+const SH={idx:0,listens:0,revealed:new Set(),done:false,phase:'idle',words:[]};   // phase: idle | rec | wait | done
 const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   stop:'<svg width="28" height="28" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="#fff"/></svg>',
   arrow:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
-  wait:'<span class="busy"></span><span class="busy"></span><span class="busy"></span>'};
+  wait:'<span class="busy"></span><span class="busy"></span><span class="busy"></span>',
+  speaker:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.5a7.5 7.5 0 0 1 0 11"/></svg>'};
 function setMic(k){const b=$('#micBtn');b.innerHTML=ICON[k];b.disabled=(k==='wait');}
-function renderShadow(){const c=learning();const msg=$('#shMsg');
+function renderShadow(play){const c=learning();const msg=$('#shMsg');
   const show=on=>{['.top','.trz','#shSent','#pShadow .spd','.micwrap'].forEach(s=>$(s).style.visibility=on?'':'hidden');};
   if(!c||!c.sents||!c.sents.length){show(false);msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';return;}
-  show(true);msg.innerHTML='';SH.idx=Math.min(c.lastIdx||0,c.sents.length-1);enterSentence(false);}
+  show(true);msg.innerHTML='';SH.idx=Math.min(c.lastIdx||0,c.sents.length-1);enterSentence(!!play);}
 function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.idx];
-  killRec();SH.attempts=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.words=s.en.split(/\s+/).filter(Boolean);
+  killRec();SH.listens=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.words=s.en.split(/\s+/).filter(Boolean);
   closeWord(true);
   SH.words.forEach((w,i)=>{if(!canon(w).length)SH.revealed.add(i);});
   const sent=$('#shSent');sent.className='sent'+(s.en.length>140?' s3':s.en.length>90?' s2':'');
@@ -311,10 +317,18 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   $('#shKo').textContent=s.ko||'';$('#shKo').classList.remove('on');
   $$('.dot').forEach(d=>d.classList.remove('f'));
   const st=$('#stamp');st.getAnimations().forEach(a=>a.cancel());st.style.opacity=0;
-  $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');
+  $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');drawListen();
   c.lastIdx=SH.idx;save();requestAnimationFrame(layout);
-  if(play)playSentence();}
+  if(play)listen(true);}
 function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];playRange(c.vid,s.start,s.end,DB.speed.shadow);}
+/* 듣기: 문장당 4번(들어갈 때 자동 재생도 1번). 원 3개는 1~3번째 듣기만 표시.
+   3번 들을 때까지 다 맞히면 Complete, 4번째 듣고 맞혀도 Incomplete.
+   4번 다 듣고 듣기를 또 누르면 = 정답 보기 → Incomplete. 문장이 끝나면 듣기 무제한. 말하기는 제한 없음 */
+function drawListen(){$$('.dot').forEach((d,i)=>d.classList.toggle('f',i<Math.min(3,SH.listens)));$('#listenBtn').innerHTML=ICON.speaker;}
+function listen(auto){if(SH.phase==='rec'||SH.phase==='wait')return;
+  if(!SH.done&&SH.listens>=4){if(auto)return;SFX.tok();finishSentence(false);return;}
+  if(!auto)SFX.tok();if(!SH.done)SH.listens++;drawListen();playSentence();}
+$('#listenBtn').onclick=()=>listen(false);
 function gotoSentence(d){const c=learning();if(!c||SH.phase==='rec'||SH.phase==='wait')return;const n=SH.idx+d;
   if(n<0){toast('첫 문장이에요');return;}if(n>=c.sents.length){toast('마지막 문장이에요');return;}SH.idx=n;enterSentence(true);}
 /* 녹음 */
@@ -341,7 +355,6 @@ async function stopRec(){const r=REC;REC=null;if(!r)return;SH.phase='wait';setMi
   try{r.stream&&r.stream.getTracks().forEach(t=>t.stop());}catch(e){}
   afterMic();
   if(!blob.size||Date.now()-(r.t0||Date.now())<300){SH.phase='idle';setMic('mic');toast('너무 짧아요. 다시 말해 주세요');return;}
-  SH.attempts++;$$('.dot').forEach((d,i)=>d.classList.toggle('f',i<Math.min(3,SH.attempts)));
   let said='';
   try{const data=await b64(blob);
     const t=await gemini([{text:`This is a short recording of an English learner repeating one English sentence for shadowing practice.
@@ -350,7 +363,7 @@ Do NOT correct anything, do NOT guess or fill in words that are not clearly spok
 If nothing intelligible is spoken, return an empty string.
 Return JSON only: {"text":"..."}`},{inlineData:{mimeType:r.mime||'audio/mp4',data}}],'judge',{timeout:30000});
     const j=parseJSON(t);said=(j&&typeof j.text==='string')?j.text:(typeof t==='string'?t:'');}
-  catch(e){SH.attempts--;$$('.dot').forEach((d,i)=>d.classList.toggle('f',i<Math.min(3,SH.attempts)));SH.phase='idle';setMic('mic');toast(errMsg(e),2800);return;}
+  catch(e){SH.phase='idle';setMic('mic');toast(errMsg(e),2800);return;}
   judge(said);}
 const b64=blob=>new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(String(fr.result).split(',')[1]||'');fr.onerror=rej;fr.readAsDataURL(blob);});
 function revealWords(list){list.forEach((i,k)=>{const w=$(`#shSent .w[data-i="${i}"]`);if(!w||w.classList.contains('r'))return;const t=w.querySelector('.t'),u=w.querySelector('.u');
@@ -359,10 +372,10 @@ function revealWords(list){list.forEach((i,k)=>{const w=$(`#shSent .w[data-i="${
 function judge(said){const got=matchWords(SH.words,said);const fresh=[...got].filter(i=>!SH.revealed.has(i)).sort((a,b)=>a-b);
   fresh.forEach(i=>SH.revealed.add(i));revealWords(fresh);
   const all=SH.revealed.size>=SH.words.length;
-  // 1·2번째에 다 맞히면 Complete, 3번째에 맞히거나 4번째까지 못 맞히면 Incomplete
-  if(all||SH.attempts>=4){setTimeout(()=>finishSentence(all&&SH.attempts<=2),fresh.length*50+300);}
+  // 듣기 3번 안에 다 맞히면 Complete (말하기는 몇 번이든), 4번째 듣기 뒤에 맞히면 Incomplete
+  if(all){SH.phase='wait';const ok=SH.listens<=3;setTimeout(()=>finishSentence(ok),fresh.length*50+300);}
   else{SH.phase='idle';setMic('mic');}}
-async function finishSentence(ok){SH.done=true;SH.phase='done';
+async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done';drawListen();
   const rest=SH.words.map((_,i)=>i).filter(i=>!SH.revealed.has(i));rest.forEach(i=>SH.revealed.add(i));revealWords(rest);
   await sleep(rest.length*50+300);
   if($('#shKo').textContent)$('#shKo').classList.add('on');
@@ -382,7 +395,6 @@ $('#resetBtn').onclick=()=>{killRec();MICOPEN=false;try{const s=navigator.audioS
 /* 문장 영역: 탭 = 다시 듣기, 좌우 밀기 = 이전/다음, 단어 꾹 = 뜻 */
 (()=>{const sh=$('#shad');let lw=null;
   gesture(sh,{
-    tap:e=>{if(e.target.closest('.wpop,.speed'))return;if(SH.phase==='rec'||SH.phase==='wait')return;playSentence();},
     long:e=>{const w=e.target.closest('#shSent .w');if(!w||!w.classList.contains('r')||SH.phase==='rec'||SH.phase==='wait')return;lw=w;openWord(+w.dataset.i);},
     swipe:dx=>{if(Math.abs(dx)>60)gotoSentence(dx<0?1:-1);},move:()=>{}});})();
 /* 단어 뜻 팝업 */

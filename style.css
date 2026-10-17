@@ -111,7 +111,7 @@ body.folded #fold i{border-bottom:none;border-top:6px solid #8a97a6}
 body.folded .micwrap{bottom:var(--micUp,140px)}
 .mic{width:92px;height:92px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(79,109,138,.3)}
 .mic:disabled{opacity:.55}
-.reset{position:absolute;left:calc(50% - 142px);width:42px;height:42px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--sub);font-size:14px}
+.reset{position:absolute;left:calc(50% + 76px);width:42px;height:42px;border-radius:50%;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--sub);font-size:14px}
 .msg{position:absolute;left:0;right:0;top:40%;text-align:center;font-size:13px;color:var(--faint);line-height:1.7;padding:0 10px;pointer-events:none}
 .busy{display:inline-block;width:6px;height:6px;border-radius:50%;background:#fff;opacity:.9;animation:bz 1s infinite ease-in-out}
 .busy+.busy{margin-left:5px;animation-delay:.15s}.busy+.busy+.busy{animation-delay:.3s}
@@ -183,3 +183,5 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 
 .clip,.v,#paste{touch-action:pan-y}
 #shad{touch-action:none}
+.listen{position:absolute;left:calc(50% - 140px);width:64px;height:64px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;color:var(--navy);font-size:12px;font-weight:800}
+.listen.off{opacity:.4}
