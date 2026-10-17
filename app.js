@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.2 */
+/* Goshé. — 고성능 쉐도잉 v1.0.3 */
 'use strict';
-const VERSION='1.0.2';
+const VERSION='1.0.3';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -80,6 +80,7 @@ function parseJSON(t){t=String(t||'').trim().replace(/^```(?:json)?/i,'').replac
 const errMsg=e=>e&&e.message==='nokey'?'설정에서 Gemini API 키를 넣어주세요 (링크 칸을 오른쪽으로 밀기)':(e&&e.message)||'오류가 났어요';
 
 /* ---------- 유튜브 플레이어 ---------- */
+const PRE=0.3,POST=0.4;   // 구간 앞뒤 여유(초)
 let YTP=null,ytReady=false,curVid='',playMon=null,PLAY=null,ytQueue=null;
 function ytInit(){if(YTP||!window.YT||!YT.Player)return;
   YTP=new YT.Player('player',{width:'100%',height:'100%',playerVars:{playsinline:1,controls:0,disablekb:1,rel:0,iv_load_policy:3,fs:0,cc_load_policy:0,modestbranding:1,origin:location.origin},
@@ -95,12 +96,14 @@ function nearRate(r){try{const av=YTP.getAvailablePlaybackRates();if(!av||!av.le
 function playRange(vid,start,end,speed,onEnd){
   whenYT(()=>{stopMon();const rate=nearRate(speed/100);
     const go=()=>{try{YTP.setPlaybackRate(rate);}catch(e){}try{YTP.seekTo(Math.max(0,start),true);YTP.playVideo();}catch(e){}
-      PLAY={end,onEnd};playMon=setInterval(()=>{let t=0;try{t=YTP.getCurrentTime();}catch(e){}
-        if(PLAY&&t>=PLAY.end-0.03){try{YTP.pauseVideo();}catch(e){}const f=PLAY.onEnd;stopMon();f&&f();}},40);};
+      PLAY={start,end,onEnd,armed:false,t0:Date.now()};playMon=setInterval(()=>{if(!PLAY)return;let t=0,st=-1;try{t=YTP.getCurrentTime();st=YTP.getPlayerState();}catch(e){}
+        /* 이동 직후엔 이전 위치가 잠깐 남아 있어서, 새 구간 안에서 실제로 재생 중일 때부터만 끝을 잼 */
+        if(!PLAY.armed){if(st===1&&t>=PLAY.start-0.6&&t<PLAY.end)PLAY.armed=true;else{if(Date.now()-PLAY.t0>4000&&st!==1){try{YTP.seekTo(Math.max(0,start),true);YTP.playVideo();}catch(e){}PLAY.t0=Date.now();}return;}}
+        if(t>=PLAY.end){try{YTP.pauseVideo();}catch(e){}const f=PLAY.onEnd;stopMon();f&&f();}},30);};
     if(curVid!==vid){curVid=vid;try{YTP.loadVideoById({videoId:vid,startSeconds:Math.max(0,start)});}catch(e){}setTimeout(go,350);}else go();});}
 function preview(vid){whenYT(()=>{stopMon();try{YTP.setPlaybackRate(1);}catch(e){}if(curVid!==vid){curVid=vid;YTP.loadVideoById({videoId:vid});}else{YTP.seekTo(0,true);YTP.playVideo();}});}
 function pausePlayer(){stopMon();try{YTP&&YTP.pauseVideo();}catch(e){}}
-function cueLearning(){const c=learning();if(!c){return;}whenYT(()=>{if(curVid!==c.vid){stopMon();curVid=c.vid;const s=c.sents?.[c.lastIdx||0];try{YTP.cueVideoById({videoId:c.vid,startSeconds:s?s.start:0});}catch(e){}}});}
+function cueLearning(){const c=learning();if(!c){return;}whenYT(()=>{if(curVid!==c.vid){stopMon();curVid=c.vid;const s=c.sents?.[c.lastIdx||0];try{YTP.cueVideoById({videoId:c.vid,startSeconds:s?Math.max(0,s.start-PRE):0});}catch(e){}}});}
 
 /* ---------- 탭·접기·로고 ---------- */
 function setTab(t,sound){if(sound&&DB.ui.tab!==t)SFX.ding();DB.ui.tab=t;save();
@@ -232,45 +235,54 @@ function parseTranscript(text){
     if(junk.test(l))continue;
     if(cur){cur.text=(cur.text?cur.text+' ':'')+l.replace(/<[^>]+>/g,'');}}
   return segs.filter(s=>s.text&&!isNaN(s.t)).map(s=>({t:s.t,text:s.text.replace(/\[(music|음악|applause|박수|laughter|웃음)\]/gi,'').replace(/\s+/g,' ').trim()})).filter(s=>s.text);}
-/* 시간 비율로 문장 나누기 (API 키 없을 때 / 실패 대비) */
-function localSplit(segs){const out=[];let buf='',bufT=null;
-  segs.forEach((s,k)=>{const nextT=segs[k+1]?segs[k+1].t:s.t+Math.max(2,s.text.length*0.07);const parts=s.text.split(/(?<=[.!?…])\s+/);let pos=0;
-    parts.forEach((p,j)=>{const at=s.t+(nextT-s.t)*(pos/Math.max(1,s.text.length));pos+=p.length+1;
-      if(bufT===null)bufT=at;buf=(buf?buf+' ':'')+p;
-      if(/[.!?…]["')\]]?$/.test(p)||(j===parts.length-1&&buf.length>160)){out.push({start:bufT,en:buf.trim(),ko:''});buf='';bufT=null;}});});
-  if(buf)out.push({start:bufT,en:buf.trim(),ko:''});return out;}
+/* 줄(유튜브가 준 시작 시간) 경계에서만 묶음을 자른다 — 시간은 추정하지 않고 원본 그대로 */
+const endsSentence=t=>/[.!?…]["'”’)\]]*$/.test(t.trim());
+function localGroups(segs,off){const out=[];let from=0;
+  segs.forEach((s,i)=>{const words=segs.slice(from,i+1).map(x=>x.text).join(' ').split(/\s+/).length;
+    if(endsSentence(s.text)||i===segs.length-1||words>=40){out.push({from:off+from,to:off+i,en:segs.slice(from,i+1).map(x=>x.text).join(' '),ko:''});from=i+1;}});
+  return out;}
+function sameWords(a,b){const A=canon(a),B=canon(b);if(!A.length)return false;let i=0,j=0,hit=0;
+  const set=new Map();B.forEach(t=>set.set(t,(set.get(t)||0)+1));A.forEach(t=>{const n=set.get(t);if(n){hit++;set.set(t,n-1);}});
+  return hit/Math.max(A.length,B.length)>=0.85;}
 async function buildScript(c,segs){
   const lastEnd=segs[segs.length-1].t+Math.max(3,segs[segs.length-1].text.length*0.075);
-  if(!DB.settings.key.trim()){c.sents=finish(localSplit(segs),lastEnd);c.noKo=true;c.lastIdx=0;c.scIdx=0;save();renderClips();toast('API 키가 없어서 해석 없이 문장만 나눴어요',2800);return;}
-  const CH=70,chunks=[];for(let i=0;i<segs.length;i+=CH)chunks.push(segs.slice(i,i+CH));
-  let all=[],failed=0,carry='';
-  for(let k=0;k<chunks.length;k++){c.busy=`스크립트 정리 중… ${k+1}/${chunks.length}`;renderClips();
-    const ch=chunks[k];const nextT=chunks[k+1]?chunks[k+1][0].t:lastEnd;
-    const listing=ch.map(s=>`[${s.t.toFixed(1)}] ${s.text}`).join('\n');
-    const prompt=`You are preparing an English listening/shadowing script from YouTube caption segments.
-Each line is "[start seconds] caption text". Captions are split mid-sentence and may lack punctuation.
-${carry?`The previous chunk ended with this unfinished text (already handled, do NOT repeat it): "${carry}"\n`:''}
-Tasks:
-1. Join the text and re-split it into natural, complete spoken sentences (very long run-on speech may be split at natural pauses; keep each item under ~25 words).
-2. Add proper punctuation and capitalization. Do NOT change, add, or remove any words otherwise.
-3. For each sentence give "start": the time in seconds when its first word is spoken. If a sentence begins in the middle of a caption line, estimate proportionally between that line's start and the next line's start (the time after the last line is ${nextT.toFixed(1)}). Use one decimal.
-4. "ko": a natural, conversational Korean translation of the sentence.
-If the last sentence of this chunk is clearly unfinished, still include it as its own item.
-Return JSON only: {"sentences":[{"start":12.3,"en":"...","ko":"..."}]}
+  const timeOf=g=>({start:segs[g.from].t,end:segs[g.to+1]?segs[g.to+1].t:lastEnd});
+  const done=groups=>{c.busy='';c.sents=groups.map(g=>Object.assign(timeOf(g),{en:g.en,ko:g.ko||''}));c.noKo=c.sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;
+    if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
+  if(!DB.settings.key.trim()){done(localGroups(segs,0));toast('API 키가 없어서 해석 없이 문장만 나눴어요',2800);return;}
+  const CH=60;let pos=0,all=[],failed=0,round=0;
+  while(pos<segs.length){round++;c.busy=`스크립트 정리 중… ${Math.min(100,Math.round(pos/segs.length*100))}%`;renderClips();
+    const ch=segs.slice(pos,pos+CH);const last=pos+ch.length>=segs.length;
+    const listing=ch.map((s,k)=>`${pos+k}: ${s.text}`).join('\n');
+    const prompt=`You are preparing an English shadowing script from YouTube caption lines. Each line is "<line number>: <caption text>".
+Group CONSECUTIVE WHOLE lines into practice units. Rules:
+- Never split a line. A unit is one or more whole lines: "from" and "to" are line numbers (inclusive).
+- Units must cover the lines in order with no gaps and no overlaps, starting at line ${pos}.
+- End a unit at the end of a line where a sentence (or a complete thought) ends. Never cut a sentence into two units.
+- If a line ends in the middle of a sentence, keep adding lines until a line ends where a sentence ends.
+- Only if no sentence ends for a long stretch (more than ~40 words), end the unit at a line that ends at a natural pause.
+- "en": the exact words of those lines joined, with proper punctuation and capitalization added. Do NOT add, remove or change words.
+- "ko": a natural, conversational Korean translation of the unit.
+${last?'':'- The last lines may continue past this chunk; still give your best grouping for them.\n'}Return JSON only: {"units":[{"from":0,"to":1,"en":"...","ko":"..."}]}
 
-Segments:
+Lines:
 ${listing}`;
-    try{const t=await gemini([{text:prompt}],'script',{timeout:60000});const j=parseJSON(t);const arr=(j&&(j.sentences||j))||[];
-      const lo=ch[0].t-0.5,hi=nextT+0.5;
-      const ok=arr.filter(x=>x&&typeof x.en==='string'&&x.en.trim()).map(x=>({start:Math.min(hi,Math.max(lo,Number(x.start)||lo)),en:x.en.trim(),ko:String(x.ko||'').trim()}));
-      if(!ok.length)throw new Error('empty');all=all.concat(ok);carry='';}
-    catch(e){if(e.message==='nokey'||/키|모델|한도/.test(e.message||'')){c.busy='';renderClips();toast(errMsg(e),3000);return;}
-      failed++;all=all.concat(localSplit(ch));}}
-  c.busy='';c.sents=finish(all,lastEnd);c.noKo=c.sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();
-  toast(failed?`스크립트를 불러왔어요 (일부 ${failed}구간은 해석 없이)`:`${c.sents.length}문장으로 정리했어요`,2600);}
-function finish(arr,lastEnd){arr.sort((a,b)=>a.start-b.start);
-  return arr.map((s,i)=>{const nx=arr[i+1];const end=nx?Math.max(s.start+0.6,nx.start+0.12):Math.max(s.start+1.2,lastEnd);
-    return {start:+Math.max(0,s.start-0.08).toFixed(2),end:+Math.min(end,s.start+20).toFixed(2),en:s.en,ko:s.ko||''};});}
+    let groups=null;
+    try{const t=await gemini([{text:prompt}],'script',{timeout:60000});const j=parseJSON(t);const arr=(j&&(j.units||j))||[];
+      // 검증: pos부터 빈틈·겹침 없이 이어져야 함
+      let p=pos;const ok=[];for(const u of arr){const f=Number(u&&u.from),to=Number(u&&u.to);if(f!==p||!(to>=f)||to>=pos+ch.length)break;
+        const raw=segs.slice(f,to+1).map(x=>x.text).join(' ');const en=String(u.en||'').trim();
+        ok.push({from:f,to,en:en&&sameWords(raw,en)?en:raw,ko:String(u.ko||'').trim()});p=to+1;}
+      if(ok.length)groups=ok;}
+    catch(e){if(e.message==='nokey'||/키|모델|한도/.test(e.message||'')){c.busy='';renderClips();toast(errMsg(e),3000);return;}}
+    if(!groups){failed++;groups=localGroups(ch,pos);}
+    const coveredTo=groups[groups.length-1].to;
+    // 묶음 경계에 걸친 마지막 덩어리는 버리고 다음 묶음에서 앞뒤 문맥과 함께 다시 정리
+    if(!last&&groups.length>1){const tail=groups.pop();all=all.concat(groups);pos=tail.from;}
+    else{all=all.concat(groups);pos=coveredTo+1;}
+    if(round>500)break;}
+  done(all);
+  toast(failed?`스크립트를 불러왔어요 (일부 구간은 해석 없이)`:`${all.length}문장으로 정리했어요`,2600);}
 
 /* ---------- 판정: 축약형 같게 보기 ---------- */
 const CONTR={"can't":['can','not'],"cannot":['can','not'],"won't":['will','not'],"shan't":['shall','not'],"ain't":['is','not'],"let's":['let','us'],
@@ -316,7 +328,7 @@ function setMic(k){const b=$('#micBtn');b.innerHTML=ICON[k];b.disabled=(k==='wai
 function renderShadow(play){const c=learning();const msg=$('#shMsg');
   const show=on=>{['.top','.trz','#shSent','#pShadow .spd','.micwrap'].forEach(s=>$(s).style.visibility=on?'':'hidden');};
   if(!c||!c.sents||!c.sents.length){show(false);msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';return;}
-  show(true);msg.innerHTML='';SH.idx=Math.min(c.lastIdx||0,c.sents.length-1);enterSentence(!!play);}
+  show(true);msg.innerHTML='';SH.idx=Math.min(c.lastIdx||0,c.sents.length-1);enterSentence(false);}
 function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.idx];
   killRec();SH.listens=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.words=s.en.split(/\s+/).filter(Boolean);
   closeWord(true);
@@ -328,8 +340,8 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   const st=$('#stamp');st.getAnimations().forEach(a=>a.cancel());st.style.opacity=0;
   $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');drawListen();
   c.lastIdx=SH.idx;save();requestAnimationFrame(layout);
-  if(play)listen(true);}
-function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];playRange(c.vid,s.start,s.end,DB.speed.shadow);}
+  }
+function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];playRange(c.vid,s.start-PRE,s.end+POST,DB.speed.shadow);}
 /* 듣기: 문장당 4번(들어갈 때 자동 재생도 1번). 원 3개는 1~3번째 듣기만 표시.
    3번 들을 때까지 다 맞히면 Complete, 4번째 듣고 맞혀도 Incomplete.
    4번 다 듣고 듣기를 또 누르면 = 정답 보기 → Incomplete. 문장이 끝나면 듣기 무제한. 말하기는 제한 없음 */
@@ -339,7 +351,7 @@ function listen(auto){if(SH.phase==='rec'||SH.phase==='wait')return;
   if(!auto)SFX.tok();if(!SH.done)SH.listens++;drawListen();playSentence();}
 $('#listenBtn').onclick=()=>listen(false);
 function gotoSentence(d){const c=learning();if(!c||SH.phase==='rec'||SH.phase==='wait')return;const n=SH.idx+d;
-  if(n<0){toast('첫 문장이에요');return;}if(n>=c.sents.length){toast('마지막 문장이에요');return;}SH.idx=n;enterSentence(true);}
+  if(n<0){toast('첫 문장이에요');return;}if(n>=c.sents.length){toast('마지막 문장이에요');return;}SH.idx=n;enterSentence(false);}
 /* 녹음 */
 const canRecord=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
 const recMime=()=>{for(const m of ['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'])try{if(MediaRecorder.isTypeSupported(m))return m;}catch(e){}return '';};
@@ -469,7 +481,7 @@ $('#drum').addEventListener('scroll',()=>{if(!DR.raf)DR.raf=requestAnimationFram
   clearTimeout(DR.settleT);DR.settleT=setTimeout(()=>{if(DR.prog)return;const ci=centerIndex();if(ci!==DR.idx){DR.idx=ci;const c=learning();if(c){c.scIdx=ci;save();}if(DR.user)playDrum();}DR.user=false;},160);},{passive:true});
 $('#drum').addEventListener('touchstart',()=>{DR.user=true;},{passive:true});
 $('#drum').addEventListener('wheel',()=>{DR.user=true;},{passive:true});
-function playDrum(){const c=learning();if(!c)return;const s=c.sents[DR.idx];playRange(c.vid,s.start,s.end,DB.speed.script);}
+function playDrum(){const c=learning();if(!c)return;const s=c.sents[DR.idx];playRange(c.vid,s.start-PRE,s.end+POST,DB.speed.script);}
 function drumGo(i){const c=learning();if(!c)return;if(i<0){toast('첫 문장이에요');return;}if(i>=c.sents.length){toast('마지막 문장이에요');return;}
   DR.idx=i;c.scIdx=i;save();scrollDrumTo(i,true);playDrum();}
 (()=>{let sx=0,sy=0,t0=0;const d=$('#drum');d.addEventListener('pointerdown',e=>{sx=e.clientX;sy=e.clientY;t0=Date.now();});
@@ -490,6 +502,8 @@ function renderVocab(){const q=$('#vSearch').value.trim().toLowerCase();const li
   if(!list.length){box.innerHTML='<div class="vempty">찾는 단어가 없어요</div>';return;}
   box.innerHTML=list.map(v=>`<div class="v" data-en="${esc(v.en)}"><div class="under del">삭제</div><div class="face"><span class="en">${esc(v.en)}</span><span class="ko">${esc(v.ko)}</span></div></div>`).join('');
   $$('#vList .v').forEach(el=>{const face=el.querySelector('.face'),del=el.querySelector('.del');
+    const peek=()=>el.classList.add('peek'),unpeek=()=>el.classList.remove('peek');
+    el.addEventListener('pointerdown',peek);['pointerup','pointercancel','pointerleave'].forEach(t=>el.addEventListener(t,unpeek));
     gesture(el,{move:dx=>{dx=Math.min(0,dx);face.style.transition='';face.style.transform=`translateX(${dx}px)`;del.style.opacity=dx<0?1:0;},
       swipe:dx=>{face.style.transition='transform .2s';if(dx<-el.clientWidth*0.3){SFX.tok();face.style.transform='translateX(-100%)';setTimeout(()=>{DB.vocab=DB.vocab.filter(v=>v.en!==el.dataset.en);save();renderVocab();},200);}
         else{face.style.transform='';setTimeout(()=>del.style.opacity=0,200);}}});});}
@@ -507,6 +521,7 @@ $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSettings(
 (()=>{let y0=null;const g=$('.sheetin');g.addEventListener('touchstart',e=>{y0=g.scrollTop<=0?e.touches[0].clientY:null;},{passive:true});
   g.addEventListener('touchend',e=>{if(y0!==null&&e.changedTouches[0].clientY-y0>90)closeSettings();y0=null;});})();
 $('#sKey').addEventListener('input',e=>{DB.settings.key=e.target.value.trim();save();});
+$('#sYt').onclick=()=>{SFX.tok();window.open('https://accounts.google.com/ServiceLogin?service=youtube&continue='+encodeURIComponent('https://www.youtube.com/'),'_blank');};
 $('#sModel').addEventListener('input',e=>{DB.settings.model=e.target.value.trim()||DEFAULT_MODEL;save();});
 $('#sModel').addEventListener('blur',e=>{if(!e.target.value.trim())e.target.value=DEFAULT_MODEL;});
 $('#sPaste').onclick=async()=>{SFX.tok();let t='';try{t=await navigator.clipboard.readText();}catch(e){}
