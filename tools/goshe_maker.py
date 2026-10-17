@@ -71,7 +71,7 @@ def group(words):
         gap = (nxt["s"] - w["e"]) if nxt else 9
         t = w["w"].strip()
         n = len(cur)
-        if re.search(r"[.!?…][\"')\]]*$", t) and (n >= 3 or gap > 0.3):
+        if re.search(r"[.!?…][\"')\]]*$", t):   # 문장 끝이면 무조건 끊음 (짧은 대답이 다음 사람 말에 붙지 않게)
             flush()
         elif n >= 22 and (re.search(r"[,;:]$", t) or gap > 0.25):
             flush()
