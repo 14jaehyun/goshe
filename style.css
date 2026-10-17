@@ -102,12 +102,10 @@ body.folded #fold i{border-bottom:none;border-top:6px solid #8a97a6}
 .w.hl{background:var(--mint-bg);box-shadow:-4px 0 0 var(--mint-bg),4px 0 0 var(--mint-bg)}
 .w.hl+.w.hl{box-shadow:-.3em 0 0 var(--mint-bg),4px 0 0 var(--mint-bg)}
 .spd{display:flex;justify-content:flex-end;margin-top:16px}
-.speed{position:relative;display:grid;grid-template-columns:40px 58px 40px;height:36px;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:max-content}
-.speed::before,.speed::after{content:"";position:absolute;top:0;bottom:0;width:1px;background:var(--line);pointer-events:none}
-.speed::before{left:40px}.speed::after{left:98px}
+.speed{position:relative;display:grid;grid-template-columns:38px 54px 38px;padding:0 3px;height:36px;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:max-content}
 .speed button{height:100%;display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--sub);padding:0;-webkit-appearance:none;appearance:none;border-radius:0}
 .speed button svg{display:block}
-.speed .v{font-size:14px;font-weight:600;color:#a7b3c0;line-height:1;font-variant-numeric:tabular-nums}
+.speed .v{border:none;overflow:visible;font-size:14px;font-weight:600;color:#a7b3c0;line-height:1;font-variant-numeric:tabular-nums}
 .stampzone{position:absolute;left:0;right:0;height:100px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:1}
 .stamp{font-size:27px;font-weight:900;letter-spacing:.04em;color:#8fd4b1;border:3.5px solid #8fd4b1;border-radius:12px;padding:2px 16px;transform:rotate(-30deg);opacity:0;text-transform:uppercase;white-space:nowrap}
 .micwrap{position:absolute;left:0;right:0;bottom:24px;display:flex;justify-content:center;align-items:center}
