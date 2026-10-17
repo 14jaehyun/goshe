@@ -289,7 +289,7 @@ const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" str
   stop:'<svg width="28" height="28" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="#fff"/></svg>',
   arrow:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   wait:'<span class="busy"></span><span class="busy"></span><span class="busy"></span>',
-  cry:'<svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="2.7" stroke-linecap="round"><circle cx="32" cy="32" r="18.4" stroke-width="2.2"/><path d="M23.2 28.2h5.2M35.6 28.2h5.2M23.2 36.9h17.6"/></svg>',
+  cry:'<svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><path d="M20 26h8M36 26h8M25 40h14"/></svg>',
   speaker:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.5a7.5 7.5 0 0 1 0 11"/></svg>'};
 function setMic(k){const b=$('#micBtn');b.innerHTML=ICON[k];b.disabled=(k==='wait');}
 function renderShadow(play){const c=learning();const msg=$('#shMsg');
