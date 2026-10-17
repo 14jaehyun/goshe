@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.1 */
+/* Goshé. — 고성능 쉐도잉 v1.0.2 */
 'use strict';
-const VERSION='1.0.1';
+const VERSION='1.0.2';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -132,8 +132,9 @@ function gesture(el,h){let st=null;
   el.addEventListener('pointerdown',e=>{if(e.button>0)return;st={x:e.clientX,y:e.clientY,t:Date.now(),id:e.pointerId,mode:'',long:false,tm:null};
     if(h.long)st.tm=setTimeout(()=>{if(st&&!st.mode){st.long=true;h.long(e);}},500);h.down&&h.down(e);});
   el.addEventListener('pointermove',e=>{if(!st||e.pointerId!==st.id)return;const dx=e.clientX-st.x,dy=e.clientY-st.y;
-    if(!st.mode){if(Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.2&&h.swipe&&!st.long){st.mode='h';clearTimeout(st.tm);try{el.setPointerCapture(e.pointerId);}catch(_){}}
-      else if(Math.abs(dy)>8||Math.abs(dx)>8){st.mode='v';clearTimeout(st.tm);h.cancel&&h.cancel();}}
+    if(!st.mode){const ax=Math.abs(dx),ay=Math.abs(dy);
+      if(ax>10&&ax>ay*1.2&&h.swipe&&!st.long){st.mode='h';clearTimeout(st.tm);try{el.setPointerCapture(e.pointerId);}catch(_){}}
+      else if((ay>8&&ay>=ax)||(ax>10&&!h.swipe)){st.mode='v';clearTimeout(st.tm);h.cancel&&h.cancel();}}
     if(st.mode==='h'){h.move&&h.move(dx);}});
   const end=(e,cancel)=>{if(!st||e.pointerId!==st.id)return;clearTimeout(st.tm);const dx=e.clientX-st.x;
     if(st.mode==='h'){h.swipe(cancel?0:dx);}else if(!st.mode&&!st.long&&!cancel&&Date.now()-st.t<450){h.tap&&h.tap(e);}else if(st.long){h.longEnd&&h.longEnd(e);}else{h.cancel&&h.cancel();}
@@ -168,7 +169,7 @@ $('#linkIn').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault
 function clipMeta(c){if(c.busy)return esc(c.busy);if(!c.sents)return '스크립트 없음';
   const n=c.sents.length;return `${n}문장`+(c.lastIdx>0?` · 마지막 ${c.lastIdx+1}번`:'')+(c.noKo?' · 해석 없음':'');}
 function sortedClips(){const L=DB.learningId;return [...DB.clips].sort((a,b)=>(b.id===L)-(a.id===L)||b.added-a.added);}
-function renderClips(){const box=$('#clipList');const list=sortedClips();
+function renderClips(){OPEN=null;const box=$('#clipList');const list=sortedClips();
   if(!list.length){box.innerHTML='<div class="cempty">유튜브 링크를 붙여넣고 <b>추가</b>를 눌러주세요.<br>쇼츠 링크도 돼요.</div>';return;}
   box.innerHTML=list.map(c=>`<div class="clip${c.id===DB.learningId?' learning':''}" data-id="${c.id}">
     <div class="under del">삭제</div><div class="under load">스크립트 불러오기</div>
@@ -178,18 +179,26 @@ function renderClips(){const box=$('#clipList');const list=sortedClips();
 function fillEmptyRows(){const box=$('#clipList');$$('#clipList .clip.empty').forEach(e=>e.remove());
   if(!DB.ui.folded||!DB.clips.length)return;const n=Math.ceil(box.clientHeight/62)-DB.clips.length;
   for(let i=0;i<n;i++){const e=document.createElement('div');e.className='clip empty';box.appendChild(e);}}
+/* 밀면 버튼이 드러나고, 드러난 버튼을 탭해야 실행 (아이폰은 탭으로만 파일 창을 열어줌) */
+let OPEN=null;
+function closeOpen(){if(!OPEN)return;const {face,del,load}=OPEN;face.style.transition='transform .2s';face.style.transform='';setTimeout(()=>{del.style.opacity=0;load.style.opacity=0;},200);OPEN=null;}
 function bindClip(el){const c=clipById(el.dataset.id),face=el.querySelector('.face'),del=el.querySelector('.del'),load=el.querySelector('.load');
+  const me={el,face,del,load,dir:0,at:0};
+  load.addEventListener('click',()=>{if(OPEN!==me||me.dir!==1||Date.now()-me.at<350)return;SFX.tok();closeOpen();pickScript(c);});
+  del.addEventListener('click',()=>{if(OPEN!==me||me.dir!==-1||Date.now()-me.at<350)return;SFX.tok();closeOpen();dialog(`이 클립을 삭제할까요?<small>${esc(c.title||'')}</small>`,[{label:'취소'},{label:'삭제',pri:true,fn:()=>removeClip(c)}]);});
   gesture(el,{
-    down:()=>el.classList.add('pressed'),cancel:()=>el.classList.remove('pressed'),
-    tap:()=>{el.classList.remove('pressed');SFX.tok();preview(c.vid);},
-    long:()=>{el.classList.remove('pressed');SFX.click();
+    down:e=>{if(OPEN&&OPEN!==me)closeOpen();if(!e.target.closest('.under'))el.classList.add('pressed');},cancel:()=>el.classList.remove('pressed'),
+    tap:e=>{el.classList.remove('pressed');if(e.target.closest('.under'))return;if(OPEN===me){closeOpen();return;}SFX.tok();preview(c.vid);},
+    long:e=>{el.classList.remove('pressed');if(OPEN)return;SFX.click();
       if(!c.sents){dialog(`스크립트를 먼저 불러와 주세요<small>${esc(c.title||'')}</small>`,[{label:'확인',pri:true}]);return;}
       if(c.id===DB.learningId){dialog(`이미 학습 중인 영상이에요<small>${esc(c.title||'')}</small>`,[{label:'확인',pri:true}]);return;}
       dialog(`이 영상으로 학습할까요?<small>${esc(c.title||'')}</small>`,[{label:'아니요'},{label:'네',pri:true,fn:()=>{DB.learningId=c.id;save();curVidCheck();renderClips();$('#clipList').scrollTop=0;}}]);},
-    move:dx=>{el.classList.remove('pressed');face.style.transition='';face.style.transform=`translateX(${dx}px)`;del.style.opacity=dx<0?1:0;load.style.opacity=dx>0?1:0;},
-    swipe:dx=>{const w=el.clientWidth;face.style.transition='transform .2s';face.style.transform='';setTimeout(()=>{del.style.opacity=0;load.style.opacity=0;},200);
-      if(dx<-w*0.3){SFX.tok();dialog(`이 클립을 삭제할까요?<small>${esc(c.title||'')}</small>`,[{label:'취소'},{label:'삭제',pri:true,fn:()=>removeClip(c)}]);}
-      else if(dx>w*0.3){SFX.tok();pickScript(c);}}});}
+    move:dx=>{el.classList.remove('pressed');const base=OPEN===me?(me.dir===1?160:-92):0;const x=base+dx;
+      face.style.transition='';face.style.transform=`translateX(${x}px)`;del.style.opacity=x<0?1:0;load.style.opacity=x>0?1:0;},
+    swipe:dx=>{me.at=Date.now();const base=OPEN===me?(me.dir===1?160:-92):0;const x=base+dx;face.style.transition='transform .2s';
+      if(x>60){me.dir=1;OPEN=me;face.style.transform='translateX(160px)';load.style.opacity=1;del.style.opacity=0;SFX.tok();}
+      else if(x<-50){me.dir=-1;OPEN=me;face.style.transform='translateX(-92px)';del.style.opacity=1;load.style.opacity=0;SFX.tok();}
+      else{OPEN=me;closeOpen();}}});}
 function curVidCheck(){/* 학습 클립이 바뀌면 다음 쉐도잉·스크립트 진입 때 그 영상으로 */}
 function removeClip(c){DB.clips=DB.clips.filter(x=>x!==c);if(DB.learningId===c.id){const n=sortedClips().find(x=>x.sents)||DB.clips[0];DB.learningId=n?n.id:null;}save();renderClips();}
 

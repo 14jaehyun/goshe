@@ -185,3 +185,4 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 #shad{touch-action:none}
 .listen{position:absolute;left:calc(50% - 140px);width:64px;height:64px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center;color:var(--navy);font-size:12px;font-weight:800}
 .listen.off{opacity:.4}
+.under.load{justify-content:flex-start}
