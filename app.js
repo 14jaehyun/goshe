@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.8 */
+/* Goshé. — 고성능 쉐도잉 v1.0.9 */
 'use strict';
-const VERSION='1.0.8';
+const VERSION='1.0.9';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -237,7 +237,7 @@ function rangeOf(c,i){const L=c.sents,s=L[i],p=L[i-1],n=L[i+1];
 async function loadScript(c,j){
   const sents=j.sents.map(x=>({start:+x.start,end:+x.end,en:String(x.en).trim(),ko:''}));
   if(j.title&&(!c.title||c.title===c.vid))c.title=j.title;
-  const done=()=>{c.busy='';c.sents=sents;c.noKo=sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
+  const done=()=>{c.busy='';c.sents=sents;delete c.names;c.noKo=sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
   if(!DB.settings.key.trim()){done();toast('API 키가 없어서 해석 없이 불러왔어요',2800);return;}
   const CH=50;let failed=0;
   for(let pos=0;pos<sents.length;pos+=CH){c.busy=`해석 붙이는 중… ${Math.round(pos/sents.length*100)}%`;renderClips();
@@ -250,7 +250,7 @@ ${ch.map((s,k)=>`${pos+k}: ${s.en}`).join('\n')}`;
     try{const t=await gemini([{text:prompt}],'script',{timeout:90000});const m=(parseJSON(t)||{});const ko=m.ko||m;let n=0;
       ch.forEach((s,k)=>{const v=ko[pos+k]??ko[String(pos+k)];if(v){s.ko=String(v).trim();n++;}});if(!n)failed++;}
     catch(e){if(e.message==='nokey'||/키|모델|한도/.test(e.message||'')){done();toast(errMsg(e),3000);return;}failed++;}}
-  done();toast(failed?`${sents.length}문장 불러왔어요 (일부는 해석 없이)`:`${sents.length}문장 불러왔어요`,2600);}
+  done();ensureNames(c);toast(failed?`${sents.length}문장 불러왔어요 (일부는 해석 없이)`:`${sents.length}문장 불러왔어요`,2600);}
 
 /* ---------- 판정: 축약형 같게 보기 ---------- */
 const CONTR={"can't":['can','not'],"cannot":['can','not'],"won't":['will','not'],"shan't":['shall','not'],"ain't":['is','not'],"let's":['let','us'],
@@ -301,7 +301,9 @@ function renderShadow(play){const c=learning();const msg=$('#shMsg');
 function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.idx];
   killRec();SH.listens=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.words=s.en.split(/\s+/).filter(Boolean);
   closeWord(true);
-  SH.words.forEach((w,i)=>{if(!canon(w).length)SH.revealed.add(i);});
+  SH.words.forEach((w,i)=>{if(!canon(w).length||isName(c,w))SH.revealed.add(i);});
+  if(!Array.isArray(c.names)){const at=SH.idx;ensureNames(c).then(ok=>{if(!ok||SH.idx!==at||SH.done||learning()!==c)return;
+    const add=SH.words.map((w,i)=>i).filter(i=>!SH.revealed.has(i)&&isName(c,SH.words[i]));add.forEach(i=>SH.revealed.add(i));revealWords(add);});}
   const sent=$('#shSent');sent.className='sent'+(s.en.length>140?' s3':s.en.length>90?' s2':'');
   sent.innerHTML=SH.words.map((w,i)=>`<span class="w${SH.revealed.has(i)?' r':''}" data-i="${i}"><span class="t">${esc(w)}</span><span class="u"></span></span>`).join('');
   $('#shKo').textContent=s.ko||'';$('#shKo').classList.remove('on');
@@ -310,6 +312,24 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');drawListen();
   c.lastIdx=SH.idx;save();requestAnimationFrame(layout);
   }
+/* 사람 이름(별명 포함)은 처음부터 보여주고 판정에서 뺌. 지명·제목·브랜드는 숨김.
+   클립마다 한 번만 Gemini에게 대문자 단어 목록을 주고 사람 이름만 골라 받음 → c.names */
+const nkey=w=>String(w).replace(/[‘’`´]/g,"'").replace(/'s$/i,'').replace(/[^A-Za-z'-]/g,'').replace(/'/g,'').toLowerCase();
+function isName(c,w){const b=String(w).replace(/^[^A-Za-z]+/,'');return /^[A-Z]/.test(b)&&Array.isArray(c.names)&&c.names.includes(nkey(b));}
+const NAMING=new Set();
+async function ensureNames(c){if(Array.isArray(c.names)||NAMING.has(c.id)||!c.sents||!DB.settings.key.trim())return false;NAMING.add(c.id);
+  try{const cand=new Set();c.sents.forEach(s=>s.en.split(/\s+/).forEach(w=>{const b=w.replace(/^[^A-Za-z]+/,'');if(/^[A-Z][a-z]/.test(b)){const k=nkey(b);if(k.length>1&&k!=='im'&&k!=='ill'&&k!=='ive'&&k!=='id')cand.add(b.replace(/[^A-Za-z'-]+$/,'').replace(/'s$/i,''));}}));
+    if(!cand.size){c.names=[];save();return true;}
+    const ctx=c.sents.slice(0,80).map(s=>s.en).join(' ');
+    const t=await gemini([{text:`Below are capitalized words from an English video script, and part of the script for context.
+Return ONLY the words that are names of PEOPLE (first names, last names, nicknames like "Pheebs", pet names of people). Do NOT include places, cities, countries, movie/show titles, brands, companies, products, days, months, or ordinary words that are just capitalized at a sentence start.
+Return JSON only: {"people":["...", ...]}
+
+Words: ${[...cand].join(', ')}
+
+Script: ${ctx}`}],'script',{timeout:30000});
+    const j=parseJSON(t)||{};const arr=Array.isArray(j.people)?j.people:[];c.names=[...new Set(arr.map(nkey).filter(Boolean))];save();return true;}
+  catch(e){return false;}finally{NAMING.delete(c.id);}}
 function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];playRange(c.vid,...rangeOf(c,SH.idx),DB.speed.shadow);}
 /* 듣기: 문장당 4번(들어갈 때 자동 재생도 1번). 원 3개는 1~3번째 듣기만 표시.
    3번 들을 때까지 다 맞히면 Complete, 4번째 듣고 맞혀도 Incomplete.
