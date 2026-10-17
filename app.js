@@ -289,6 +289,7 @@ const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" str
   stop:'<svg width="28" height="28" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="#fff"/></svg>',
   arrow:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
   wait:'<span class="busy"></span><span class="busy"></span><span class="busy"></span>',
+  cry:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M7.6 9.6q1.3-1.2 2.6 0M13.8 9.6q1.3-1.2 2.6 0"/><path d="M8.6 16.6q3.4-3 6.8 0"/><path d="M16.9 12.4q-.9 1.4-.9 2.1a.9.9 0 0 0 1.8 0q0-.7-.9-2.1z" fill="currentColor" stroke-width="1.2"/></svg>',
   speaker:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.5a7.5 7.5 0 0 1 0 11"/></svg>'};
 function setMic(k){const b=$('#micBtn');b.innerHTML=ICON[k];b.disabled=(k==='wait');}
 function renderShadow(play){const c=learning();const msg=$('#shMsg');
@@ -298,7 +299,7 @@ function renderShadow(play){const c=learning();const msg=$('#shMsg');
 function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.idx];
   killRec();SH.listens=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.words=s.en.split(/\s+/).filter(Boolean);
   closeWord(true);
-  SH.words.forEach((w,i)=>{if(!canon(w).length)SH.revealed.add(i);});
+  SH.words.forEach((w,i)=>{if(!canon(w).length||isName(c,w))SH.revealed.add(i);});
   const sent=$('#shSent');sent.className='sent'+(s.en.length>140?' s3':s.en.length>90?' s2':'');
   sent.innerHTML=SH.words.map((w,i)=>`<span class="w${SH.revealed.has(i)?' r':''}" data-i="${i}"><span class="t">${esc(w)}</span><span class="u"></span></span>`).join('');
   $('#shKo').textContent=s.ko||'';$('#shKo').classList.remove('on');
@@ -307,11 +308,18 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');drawListen();
   c.lastIdx=SH.idx;save();requestAnimationFrame(layout);
   }
+const COMMON=new Set(('i im ive ill id a an the and but or so if then oh ah uh um hey hi yes yeah no not okay ok well wait look listen come go what whats where wheres who whos why how when which this that these those there theres here heres it its is are was were be been do does did dont doesnt didnt can cant could will wont would should you youre your we were our they theyre their he hes his she shes her him them me my mine us all just now right sure please thanks thank sorry god man dude guys good great fine alright all-right really very too also only even still never always maybe let lets get got have has had am to of in on at for with from by about up down out over off as like because cause').split(' '));
+const nkey=w=>String(w).replace(/[‘’`´]/g,"'").replace(/'s$/i,'').replace(/[^A-Za-z'-]/g,'').toLowerCase().replace(/'/g,'');
+function namesOf(c){if(c._names)return c._names;const N=new Set();
+  c.sents.forEach(s=>{const ws=s.en.split(/\s+/);ws.forEach((w,i)=>{if(i===0)return;const prev=ws[i-1];if(/[.!?…]["'”’]*$/.test(prev))return;
+    const bare=w.replace(/^[^A-Za-z]+/,'');if(!/^[A-Z][a-z]/.test(bare))return;const k=nkey(bare);if(k.length>1&&!COMMON.has(k))N.add(k);});});
+  Object.defineProperty(c,'_names',{value:N,enumerable:false,configurable:true});return N;}
+function isName(c,w){const b=String(w).replace(/^[^A-Za-z]+/,'');return /^[A-Z]/.test(b)&&namesOf(c).has(nkey(b));}
 function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];playRange(c.vid,...rangeOf(c,SH.idx),DB.speed.shadow);}
 /* 듣기: 문장당 4번(들어갈 때 자동 재생도 1번). 원 3개는 1~3번째 듣기만 표시.
    3번 들을 때까지 다 맞히면 Complete, 4번째 듣고 맞혀도 Incomplete.
    4번 다 듣고 듣기를 또 누르면 = 정답 보기 → Incomplete. 문장이 끝나면 듣기 무제한. 말하기는 제한 없음 */
-function drawListen(){$$('.dot').forEach((d,i)=>d.classList.toggle('f',i<Math.min(3,SH.listens)));$('#listenBtn').innerHTML=ICON.speaker;}
+function drawListen(){$$('.dot').forEach((d,i)=>d.classList.toggle('f',i<Math.min(3,SH.listens)));$('#listenBtn').innerHTML=(!SH.done&&SH.listens>=4)?ICON.cry:ICON.speaker;}
 function listen(auto){if(SH.phase==='rec'||SH.phase==='wait')return;
   if(!SH.done&&SH.listens>=4){if(auto)return;SFX.tok();finishSentence(false);return;}
   if(!auto)SFX.tok();if(!SH.done)SH.listens++;drawListen();playSentence();}
@@ -373,12 +381,6 @@ async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done'
   setTimeout(()=>{ok?SFX.ok():SFX.ng();setMic('arrow');},175);
   const c=learning();if(c){c.res=c.res||{};c.res[SH.idx]=ok?1:0;save();}}
 $('#micBtn').onclick=()=>{if(SH.phase==='idle')startRec();else if(SH.phase==='rec'){SFX.tok();stopRec();}else if(SH.phase==='done'){SFX.tok();gotoSentence(1);}};
-$('#resetBtn').onclick=()=>{killRec();MICOPEN=false;try{const s=navigator.audioSession;if(s){s.type='auto';}}catch(e){}ambient();rebuildAudio();SFX.tok();
-  if(YTP&&curVid){let t=0;try{t=YTP.getCurrentTime();}catch(e){}const v=curVid;try{YTP.destroy();}catch(e){}YTP=null;ytReady=false;curVid='';
-    $$('#video iframe').forEach(f=>f.remove());if(!$('#player'))$('#video').insertAdjacentHTML('afterbegin','<div id="player"></div>');
-    whenYT(()=>{curVid=v;try{YTP.cueVideoById({videoId:v,startSeconds:t});}catch(e){}});}
-  if(SH.phase==='rec'||SH.phase==='wait'){SH.phase='idle';setMic('mic');}
-  toast('소리를 다시 연결했어요');};
 /* 문장 영역: 탭 = 다시 듣기, 좌우 밀기 = 이전/다음, 단어 꾹 = 뜻 */
 (()=>{const sh=$('#shad');let lw=null;
   gesture(sh,{
