@@ -204,3 +204,6 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 
 .mic .wv{display:flex;align-items:center;gap:5px;height:40px}
 .mic .wv i{display:block;width:5px;height:8px;border-radius:3px;background:#fff}
+
+.pn[hidden]{display:none}
+#scCount{position:absolute;top:4px;right:20px;height:16px;line-height:16px;font-style:normal;font-size:11px;color:var(--faint)}

@@ -518,7 +518,7 @@ function liveRate(k){if(PLAY&&YTP&&((k==='shadow'&&DB.ui.tab==='pShadow')||(k===
 /* ---------- ③ 스크립트 드럼 ---------- */
 const DR={idx:0,lastCenter:-1,raf:0,user:false,settleT:null,prog:false};
 function renderDrum(){const c=learning();const box=$('#drumIn'),msg=$('#scMsg');
-  if(!c||!c.sents||!c.sents.length){box.innerHTML='';msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';$('.ctrl').style.visibility='hidden';return;}
+  if(!c||!c.sents||!c.sents.length){box.innerHTML='';$('#scCount').textContent='';msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';$('.ctrl').style.visibility='hidden';return;}
   msg.innerHTML='';$('.ctrl').style.visibility='';
   box.innerHTML='<div class="pad"></div>'+c.sents.map((s,i)=>`<p data-i="${i}">${esc(s.en)}${s.ko?'':`<span class="noko"><i></i>(${i+1})</span>`}</p>`).join('')+'<div class="pad"></div>';
   DR.idx=Math.min(c.scIdx||0,c.sents.length-1);DR.lastCenter=DR.idx;drumPads();scrollDrumTo(DR.idx,false);}
@@ -530,21 +530,22 @@ function centerIndex(){const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2
   for(let i=lo;i<hi;i++){const p=ps[i];const c=p.offsetTop+p.offsetHeight/2;const dd=Math.abs(c-mid);if(dd<bd){bd=dd;best=i;}}
   if(bd>200){for(let i=0;i<ps.length;i++){const p=ps[i];const dd=Math.abs(p.offsetTop+p.offsetHeight/2-mid);if(dd<bd){bd=dd;best=i;}}}return best;}
 const OPS=[1,.72,.6,.5,.42,.36,.3,.26,.22];
-function shadeDrum(){const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2;const ci=centerIndex();const ps=$$('#drum p');
+function scCount(){const c=learning();$('#scCount').textContent=c&&c.sents&&c.sents.length?`${DR.idx+1} / ${c.sents.length}`:'';}
+function shadeDrum(){scCount();const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2;const ci=centerIndex();const ps=$$('#drum p');
   for(let i=Math.max(0,ci-25);i<Math.min(ps.length,ci+26);i++){const p=ps[i];const c=p.offsetTop+p.offsetHeight/2;const dist=Math.abs(c-mid)/24;
     const k=Math.min(OPS.length-1,dist);const lo=Math.floor(k),fr=k-lo;const op=OPS[lo]+(OPS[Math.min(OPS.length-1,lo+1)]-OPS[lo])*fr;
     p.style.opacity=op.toFixed(3);p.style.transform=`scaleY(${Math.max(.62,1-dist*.04).toFixed(3)})`;}
   if(ci!==DR.lastCenter){DR.lastCenter=ci;if(DR.user)SFX.tick();}   /* 손으로 돌릴 때만 틱 (탭 전환·영상 접기로 칸 크기가 바뀔 땐 조용히) */}
 $('#drum').addEventListener('scroll',()=>{if(!DR.raf)DR.raf=requestAnimationFrame(()=>{DR.raf=0;shadeDrum();});
-  clearTimeout(DR.settleT);DR.settleT=setTimeout(()=>{if(DR.touch)return;if(DR.prog&&!DR.user)return;const ci=centerIndex();if(ci!==DR.idx){DR.idx=ci;const c=learning();if(c){c.scIdx=ci;save();}if(DR.user)playDrum();}DR.user=false;},160);},{passive:true});
+  clearTimeout(DR.settleT);DR.settleT=setTimeout(()=>{if(DR.touch)return;if(DR.prog&&!DR.user)return;const ci=centerIndex();if(ci!==DR.idx){DR.idx=ci;scCount();const c=learning();if(c){c.scIdx=ci;save();}if(DR.user)playDrum();}DR.user=false;},160);},{passive:true});
 $('#drum').addEventListener('touchstart',()=>{DR.user=true;DR.prog=false;DR.touch=true;},{passive:true});
 $('#drum').addEventListener('touchend',()=>{DR.touch=false;$('#drum').dispatchEvent(new Event('scroll'));},{passive:true});
 $('#drum').addEventListener('wheel',()=>{DR.user=true;},{passive:true});
 function playDrum(){const c=learning();if(!c)return;const s=c.sents[DR.idx];playRange(c.vid,...rangeOf(c,DR.idx),DB.speed.script);}
 function drumGo(i){const c=learning();if(!c)return;if(i<0){toast('첫 문장이에요');return;}if(i>=c.sents.length){toast('마지막 문장이에요');return;}
-  DR.idx=i;c.scIdx=i;save();scrollDrumTo(i,true);playDrum();}
+  DR.idx=i;c.scIdx=i;save();scCount();scrollDrumTo(i,true);playDrum();}
 (()=>{let sx=0,sy=0,t0=0;const d=$('#drum');d.addEventListener('pointerdown',e=>{sx=e.clientX;sy=e.clientY;t0=Date.now();});
-  d.addEventListener('pointerup',e=>{if(Math.abs(e.clientX-sx)<8&&Math.abs(e.clientY-sy)<8&&Date.now()-t0<400){drumGo(DR.idx+1);}});})();
+  d.addEventListener('pointerup',e=>{if(Math.abs(e.clientX-sx)<8&&Math.abs(e.clientY-sy)<8&&Date.now()-t0<400){const r=d.getBoundingClientRect();if(e.clientX<r.left+r.width/2)drumGo(DR.idx);else drumGo(DR.idx+1);}});})();   // 왼쪽 반 = 한 번 더, 오른쪽 반 = 다음 문장
 $('#scPrev').onclick=()=>{SFX.tok();drumGo(DR.idx-1);};
 $('#scAgain').onclick=()=>{SFX.tok();drumGo(DR.idx);};
 $('#scNext').onclick=()=>{SFX.tok();drumGo(DR.idx+1);};
