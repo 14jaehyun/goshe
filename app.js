@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.1.1 */
+/* Goshé. — 고성능 쉐도잉 v1.1.2 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -85,7 +85,7 @@ async function gemini(parts,tag,opt={}){
     const t=await r.text();let m=t;try{m=JSON.parse(t).error?.message||t;}catch(e){}
     if(/API key not valid|API_KEY_INVALID/i.test(m))throw new Error('API 키를 확인해 주세요');
     if(r.status===404)throw new Error('모델 이름을 확인해 주세요: '+model);
-    if(r.status===429)throw new Error('사용 한도를 넘었어요. 잠시 후 다시 해주세요');
+    if(r.status===429){if(opt.wait429&&i<2){await sleep([8000,20000][i]);continue;}throw new Error('사용 한도를 넘었어요. 잠시 후 다시 해주세요');}
     last=m;if(r.status>=500){await sleep(1200);continue;}break;}
   throw new Error(last||'제미나이 오류');}
 function parseJSON(t){t=String(t||'').trim().replace(/^```(?:json)?/i,'').replace(/```$/,'').trim();try{return JSON.parse(t);}catch(e){}
@@ -253,18 +253,24 @@ async function loadScript(c,j){
   if(j.title&&(!c.title||c.title===c.vid))c.title=j.title;
   const done=()=>{c.busy='';c.sents=sents;delete c.names;c.noKo=sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
   if(!DB.settings.key.trim()){done();toast('API 키가 없어서 해석 없이 불러왔어요',2800);return;}
-  const CH=50;let failed=0;
-  for(let pos=0;pos<sents.length;pos+=CH){c.busy=`해석 붙이는 중… ${Math.round(pos/sents.length*100)}%`;renderClips();
-    const ch=sents.slice(pos,pos+CH);
-    const prompt=`These are consecutive lines from an English video (often a dialogue). Translate each line into natural, conversational Korean, using the other lines as context.
-Each line is "<number>: <text>". Return JSON only: {"ko":{"<number>":"<Korean>", ...}} with every number.
+  /* 20줄씩 해석 → 빠진 줄만 모아 최대 2번 더 요청. 한도(429)는 기다렸다 재시도 */
+  const ask=async(list)=>{const prompt=`These are consecutive lines from an English video (often a dialogue). Translate each line into natural, conversational Korean, using the other lines as context.
+Each line is "<number>: <text>". Return JSON only: {"ko":{"<number>":"<Korean>", ...}} with every number. Do not skip any number.
 
 Lines:
-${ch.map((s,k)=>`${pos+k}: ${s.en}`).join('\n')}`;
-    try{const t=await gemini([{text:prompt}],'script',{timeout:90000});const m=(parseJSON(t)||{});const ko=m.ko||m;let n=0;
-      ch.forEach((s,k)=>{const v=ko[pos+k]??ko[String(pos+k)];if(v){s.ko=String(v).trim();n++;}});if(!n)failed++;}
-    catch(e){if(e.message==='nokey'||/키|모델|한도/.test(e.message||'')){done();toast(errMsg(e),3000);return;}failed++;}}
-  done();ensureNames(c);toast(failed?`${sents.length}문장 불러왔어요 (일부는 해석 없이)`:`${sents.length}문장 불러왔어요`,2600);}
+${list.map(i=>`${i}: ${sents[i].en}`).join('\n')}`;
+    const t=await gemini([{text:prompt}],'script',{timeout:90000,wait429:true,config:{maxOutputTokens:8192}});const m=(parseJSON(t)||{});const ko=m.ko||m;
+    list.forEach(i=>{const v=ko[i]??ko[String(i)];if(v&&String(v).trim())sents[i].ko=String(v).trim();});};
+  const CH=20;let fatal=null;
+  for(let round=0;round<3&&!fatal;round++){
+    const todo=sents.map((s,i)=>s.ko?-1:i).filter(i=>i>=0);if(!todo.length)break;
+    for(let k=0;k<todo.length;k+=CH){
+      c.busy=`해석 붙이는 중… ${Math.round(sents.filter(s=>s.ko).length/sents.length*100)}%`;renderClips();
+      try{await ask(todo.slice(k,k+CH));}
+      catch(e){if(e.message==='nokey'||/키|모델|한도/.test(e.message||'')){fatal=e;break;}}}}
+  const failed=sents.filter(s=>!s.ko).length;
+  if(fatal&&failed===sents.length){done();toast(errMsg(fatal),3000);return;}
+  done();ensureNames(c);toast(failed?`${sents.length}문장 불러왔어요 (${failed}문장은 해석 없이)`:`${sents.length}문장 불러왔어요`,2600);}
 
 /* ---------- 판정: 축약형 같게 보기 ---------- */
 const CONTR={"can't":['can','not'],"cannot":['can','not'],"won't":['will','not'],"shan't":['shall','not'],"ain't":['is','not'],"let's":['let','us'],
