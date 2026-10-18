@@ -644,12 +644,12 @@ $('#vFile').addEventListener('change',async e=>{const file=e.target.files&&e.tar
 /* ---------- 쉐도잉 n / nn 터치 → 그 자리에서 문장 번호 입력 (숫자패드, 넘치면 마지막 문장) ---------- */
 (()=>{const em=$('#shCount');let inp=null;
   const close=go=>{if(!inp)return;const v=inp.value.trim(),c=learning();const el=inp;inp=null;el.remove();
-    if(go&&v&&c&&c.sents&&c.sents.length){let n=parseInt(v,10);if(isFinite(n)){n=Math.max(1,Math.min(c.sents.length,n));SFX.tok();SH.idx=n-1;enterSentence(false);return;}}
+    if(go&&v&&v!==String(SH.idx+1)&&c&&c.sents&&c.sents.length){let n=parseInt(v,10);if(isFinite(n)){n=Math.max(1,Math.min(c.sents.length,n));SFX.tok();SH.idx=n-1;enterSentence(false);return;}}
     if(c&&c.sents)em.textContent=`${SH.idx+1} / ${c.sents.length}`;};
   em.addEventListener('pointerdown',e=>e.stopPropagation());
   em.addEventListener('click',e=>{e.stopPropagation();const c=learning();if(inp||!c||!c.sents||!c.sents.length||SH.phase==='rec'||SH.phase==='wait')return;
-    em.textContent='';inp=document.createElement('input');Object.assign(inp,{type:'text',inputMode:'numeric',pattern:'[0-9]*',autocomplete:'off',enterKeyHint:'go',placeholder:String(SH.idx+1)});inp.className='goin';
+    em.textContent='';inp=document.createElement('input');Object.assign(inp,{type:'text',inputMode:'numeric',pattern:'[0-9]*',autocomplete:'off',enterKeyHint:'go',value:String(SH.idx+1)});inp.className='goin';
     em.appendChild(inp);em.appendChild(document.createTextNode(` / ${c.sents.length}`));
     inp.addEventListener('input',()=>{inp.value=inp.value.replace(/\D/g,'').slice(0,5);});
     inp.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();close(true);}else if(ev.key==='Escape')close(false);});
-    inp.addEventListener('blur',()=>close(true));inp.focus();});})();
+    inp.addEventListener('blur',()=>close(true));inp.focus();try{inp.setSelectionRange(0,inp.value.length);}catch(_){inp.select();}});})();   // 지금 번호를 전체 선택: 바로 입력하면 덮어쓰고, 백스페이스면 지워짐
