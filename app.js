@@ -280,7 +280,7 @@ async function loadScript(c,j){
   sents.forEach(x=>delete x.w);
   /* 20줄씩 해석 → 빠진 줄만 모아 최대 2번 더 요청. 한도(429)는 기다렸다 재시도 */
   const ask=async(list)=>{const prompt=`These are consecutive lines from an English video (often a dialogue). Translate each line into natural, conversational Korean, using the other lines as context.
-Each line is "<number>: <text>". Return JSON only: {"ko":{"<number>":"<Korean>", ...}} with every number. Do not skip any number.
+Each line is "<number>: <text>". Return JSON only: {"ko":{"<number>":"<Korean>", ...}} with every number. Do not skip any number. Translate each line on its own even if it continues the previous line — never merge two lines into one translation.
 
 Lines:
 ${list.map(i=>`${i}: ${sents[i].en}`).join('\n')}`;
