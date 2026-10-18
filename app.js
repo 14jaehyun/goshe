@@ -191,7 +191,7 @@ async function addLink(){const inp=$('#linkIn');const vid=vidOf(inp.value);
   if(!vid){toast('유튜브 링크를 확인해 주세요');return;}
   inp.value='';inp.blur();
   if(DB.clips.some(c=>c.vid===vid)){toast('이미 있는 클립이에요');return;}
-  const c={id:'c'+Date.now().toString(36),vid,title:'',added:Date.now(),sents:null,lastIdx:0,scIdx:0};DB.clips.push(c);
+  const c={id:'c'+Date.now().toString(36),vid,title:'',added:Date.now(),ord:Date.now(),sents:null,lastIdx:0,scIdx:0};DB.clips.push(c);
   if(!DB.learningId)DB.learningId=c.id;save();renderClips();
   const t=await fetchTitle(vid);if(t){c.title=t;save();renderClips();}}
 $('#addBtn').onclick=()=>{SFX.tok();addLink();};
@@ -202,19 +202,39 @@ $('#linkIn').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault
 
 function clipMeta(c){if(c.busy)return esc(c.busy);if(!c.sents)return '스크립트 없음';
   const n=c.sents.length;return `${n}문장`+(c.lastIdx>0?` · 마지막 ${c.lastIdx+1}번`:'')+(c.noKo?' · 해석 없음':'');}
-function sortedClips(){const L=DB.learningId;return [...DB.clips].sort((a,b)=>(b.id===L)-(a.id===L)||b.added-a.added);}
-function renderClips(){OPEN=null;const box=$('#clipList');const list=sortedClips();
-  if(!list.length){box.innerHTML='<div class="cempty">유튜브 링크를 붙여넣고 <b>추가</b>를 눌러주세요.<br>쇼츠 링크도 돼요.</div>';return;}
-  box.innerHTML=list.map(c=>`<div class="clip${c.id===DB.learningId?' learning':''}" data-id="${c.id}">
-    <div class="under del">삭제</div><div class="under load">스크립트 불러오기</div>
+/* 순서: 학습 중 카드는 위에 고정, 나머지는 ord 큰 순(새로 추가한 게 위). 학습 영상을 바꾸면 두 카드의 ord를 맞바꿔 자리 교환 */
+DB.clips.forEach(c=>{if(c.ord==null)c.ord=c.added||0;});
+function sortedClips(){const L=DB.learningId;return [...DB.clips].sort((a,b)=>(b.id===L)-(a.id===L)||b.ord-a.ord);}
+const IC_LOAD='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>',IC_DEL='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+function clipHTML(c){return `<div class="clip${c.id===DB.learningId?' learning':''}" data-id="${c.id}">
+    <div class="under del">${IC_DEL}</div><div class="under load">${IC_LOAD}</div>
     <div class="face"><div class="thumb" style="background-image:url(https://i.ytimg.com/vi/${c.vid}/mqdefault.jpg)"></div>
-    <div class="cinfo"><div class="ct">${esc(c.title||'제목 불러오는 중…')}</div><div class="cs">${clipMeta(c)}</div></div>${c.id===DB.learningId?'<div class="badge">학습 중</div>':''}</div></div>`).join('');
-  $$('#clipList .clip[data-id]').forEach(bindClip);fillEmptyRows();}
+    <div class="cinfo"><div class="ct">${esc(c.title||'제목 불러오는 중…')}</div><div class="cs">${clipMeta(c)}</div></div>${c.id===DB.learningId?'<div class="badge">ing</div>':''}</div></div>`;}
+function renderClips(){OPEN=null;const box=$('#clipList'),pin=$('#clipPin');const list=sortedClips();
+  if(!list.length){pin.innerHTML='';box.innerHTML='<div class="cempty">유튜브 링크를 붙여넣고 <b>+</b>를 눌러주세요.<br>쇼츠 링크도 돼요.</div>';return;}
+  const L=list.find(c=>c.id===DB.learningId);
+  pin.innerHTML=L?clipHTML(L):'';box.innerHTML=list.filter(c=>c!==L).map(clipHTML).join('');
+  $$('#pClip .clip[data-id]').forEach(bindClip);fillEmptyRows();}
 function fillEmptyRows(){const box=$('#clipList');$$('#clipList .clip.empty').forEach(e=>e.remove());
-  if(!DB.ui.folded||!DB.clips.length)return;const n=Math.ceil(box.clientHeight/62)-DB.clips.length;
+  if(!DB.ui.folded||!DB.clips.length)return;const n=Math.ceil(box.clientHeight/62)-box.children.length;
   for(let i=0;i<n;i++){const e=document.createElement('div');e.className='clip empty';box.appendChild(e);}}
+/* 학습 영상 교체: 두 카드가 살짝 떠올라 자리를 맞바꿈. 바로 아래 0.5초 ~ 영상 펼친 화면 맨 아래 0.7초 (접으면 더 멀어져 최대 0.9초) */
+let SWAPPING=false;
+function swapLearning(c){const old=learning();const elA=$(`#clipList .clip[data-id="${c.id}"]`),elB=old&&$(`#clipPin .clip[data-id="${old.id}"]`);
+  const commit=()=>{if(old){const t=old.ord;old.ord=c.ord;c.ord=t;}DB.learningId=c.id;save();renderClips();};
+  if(!elA||!elB||!elA.animate){commit();return;}
+  const ra=elA.getBoundingClientRect(),rb=elB.getBoundingClientRect(),dist=Math.abs(ra.top-rb.top);
+  const box=$('#clipList'),vh=$('#video').getBoundingClientRect().height||innerWidth*0.5625;
+  const hExp=Math.max(62,(DB.ui.folded?box.clientHeight-vh:box.clientHeight)+62);
+  const dur=Math.round(1000*Math.min(0.9,Math.max(0.5,0.5+0.2*(dist-62)/Math.max(1,hExp-62))));
+  SWAPPING=true;const mk=(el,r)=>{const k=el.cloneNode(true);k.classList.remove('pressed');Object.assign(k.style,{position:'fixed',left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px',zIndex:50,margin:0,borderBottom:'none',pointerEvents:'none'});document.body.appendChild(k);el.style.visibility='hidden';return k;};
+  const ka=mk(elA,ra),kb=mk(elB,rb);const dy=rb.top-ra.top;
+  const fr=(y,z)=>[{transform:'translateY(0) scale(1)',boxShadow:'0 0 0 rgba(0,0,0,0)'},{offset:.18,transform:'translateY(0) scale(1.035)',boxShadow:`0 10px 24px rgba(31,42,55,${z})`},{offset:.85,transform:`translateY(${y}px) scale(1.035)`,boxShadow:`0 10px 24px rgba(31,42,55,${z})`},{transform:`translateY(${y}px) scale(1)`,boxShadow:'0 0 0 rgba(0,0,0,0)'}];
+  ka.animate(fr(dy,.18),{duration:dur,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'});
+  const an=kb.animate(fr(-dy,.08),{duration:dur,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'});
+  an.onfinish=()=>{commit();ka.remove();kb.remove();SWAPPING=false;};}
 /* 밀면 버튼이 드러나고, 드러난 버튼을 탭해야 실행 (아이폰은 탭으로만 파일 창을 열어줌) */
-let OPEN=null;
+let OPEN=null;const OPN=64;
 function closeOpen(){if(!OPEN)return;const {face,del,load}=OPEN;del.style.pointerEvents=load.style.pointerEvents='none';face.style.transition='transform .2s';face.style.transform='';setTimeout(()=>{del.style.opacity=0;load.style.opacity=0;},200);OPEN=null;}
 function bindClip(el){const c=clipById(el.dataset.id),face=el.querySelector('.face'),del=el.querySelector('.del'),load=el.querySelector('.load');
   const me={el,face,del,load,dir:0,at:0};
@@ -223,15 +243,15 @@ function bindClip(el){const c=clipById(el.dataset.id),face=el.querySelector('.fa
   gesture(el,{
     down:e=>{if(OPEN&&OPEN!==me)closeOpen();if(!e.target.closest('.under'))el.classList.add('pressed');},cancel:()=>el.classList.remove('pressed'),
     tap:e=>{el.classList.remove('pressed');if(e.target.closest('.under'))return;if(OPEN===me){closeOpen();return;}SFX.tok();preview(c.vid);},
-    long:e=>{el.classList.remove('pressed');if(OPEN)return;SFX.click();
+    long:e=>{el.classList.remove('pressed');if(OPEN||SWAPPING)return;SFX.click();
       if(!c.sents){dialog(`스크립트를 먼저 불러와 주세요<small>${esc(c.title||'')}</small>`,[{label:'확인',pri:true}]);return;}
       if(c.id===DB.learningId){dialog(`이미 학습 중인 영상이에요<small>${esc(c.title||'')}</small>`,[{label:'확인',pri:true}]);return;}
-      dialog(`이 영상으로 학습할까요?<small>${esc(c.title||'')}</small>`,[{label:'아니요'},{label:'네',pri:true,fn:()=>{DB.learningId=c.id;save();curVidCheck();renderClips();$('#clipList').scrollTop=0;}}]);},
-    move:dx=>{el.classList.remove('pressed');const base=OPEN===me?(me.dir===1?160:-92):0;const x=base+dx;
+      dialog(`이 영상으로 학습할까요?<small>${esc(c.title||'')}</small>`,[{label:'아니요'},{label:'네',pri:true,fn:()=>swapLearning(c)}]);},
+    move:dx=>{el.classList.remove('pressed');const base=OPEN===me?(me.dir===1?OPN:-OPN):0;const x=base+dx;
       face.style.transition='';face.style.transform=`translateX(${x}px)`;del.style.opacity=x<0?1:0;load.style.opacity=x>0?1:0;del.style.pointerEvents=load.style.pointerEvents='none';},
-    swipe:dx=>{me.at=Date.now();const base=OPEN===me?(me.dir===1?160:-92):0;const x=base+dx;face.style.transition='transform .2s';
-      if(x>60){me.dir=1;OPEN=me;face.style.transform='translateX(160px)';load.style.opacity=1;del.style.opacity=0;load.style.pointerEvents='auto';del.style.pointerEvents='none';SFX.tok();}
-      else if(x<-50){me.dir=-1;OPEN=me;face.style.transform='translateX(-92px)';del.style.opacity=1;load.style.opacity=0;del.style.pointerEvents='auto';load.style.pointerEvents='none';SFX.tok();}
+    swipe:dx=>{me.at=Date.now();const base=OPEN===me?(me.dir===1?OPN:-OPN):0;const x=base+dx;face.style.transition='transform .2s';
+      if(x>40){me.dir=1;OPEN=me;face.style.transform=`translateX(${OPN}px)`;load.style.opacity=1;del.style.opacity=0;load.style.pointerEvents='auto';del.style.pointerEvents='none';SFX.tok();}
+      else if(x<-40){me.dir=-1;OPEN=me;face.style.transform=`translateX(${-OPN}px)`;del.style.opacity=1;load.style.opacity=0;del.style.pointerEvents='auto';load.style.pointerEvents='none';SFX.tok();}
       else{OPEN=me;closeOpen();}}});}
 function curVidCheck(){/* 학습 클립이 바뀌면 다음 쉐도잉·스크립트 진입 때 그 영상으로 */}
 function removeClip(c){DB.clips=DB.clips.filter(x=>x!==c);if(DB.learningId===c.id){const n=sortedClips().find(x=>x.sents)||DB.clips[0];DB.learningId=n?n.id:null;}save();renderClips();}
@@ -335,6 +355,7 @@ const SH={idx:0,listens:0,revealed:new Set(),done:false,phase:'idle',words:[]}; 
 const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   stop:'<svg width="28" height="28" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="#fff"/></svg>',
   arrow:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  wave:'<span class="wv"><i></i><i></i><i></i><i></i><i></i></span>',
   wait:'<span class="busy"></span><span class="busy"></span><span class="busy"></span>',
   cry:'<svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><path d="M20 26h8M36 26h8M25 40h14"/></svg>',
   speaker:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.5a7.5 7.5 0 0 1 0 11"/></svg>'};
@@ -377,7 +398,8 @@ function playSentence(){const c=learning();if(!c)return;const s=c.sents[SH.idx];
 /* 듣기: 문장당 4번(들어갈 때 자동 재생도 1번). 원 3개는 1~3번째 듣기만 표시.
    3번 들을 때까지 다 맞히면 Complete, 4번째 듣고 맞혀도 Incomplete.
    4번 다 듣고 듣기를 또 누르면 = 정답 보기 → Incomplete. 문장이 끝나면 듣기 무제한. 말하기는 제한 없음 */
-function drawListen(){$$('.dot').forEach((d,i)=>d.classList.toggle('f',i<Math.min(3,SH.listens)));const sad=!SH.done&&SH.listens>=4;$('#listenBtn').classList.toggle('sad',sad);$('#listenBtn').innerHTML=sad?ICON.cry:ICON.speaker;}
+function drawListen(){$$('.dot').forEach((d,i)=>d.classList.toggle('f',i<Math.min(3,SH.listens)));const sad=!SH.done&&SH.listens>=4;$('#listenBtn').classList.toggle('sad',sad);$('#listenBtn').innerHTML=sad?ICON.cry:ICON.speaker;
+  if(!SH.done&&SH.listens>=4&&$('#shKo').textContent)$('#shKo').classList.add('on');}   // 네 번째 듣기 = 해석 힌트
 function listen(auto){if(SH.phase==='rec'||SH.phase==='wait')return;
   if(!SH.done&&SH.listens>=4){if(auto)return;SFX.tok();finishSentence(false);return;}
   if(!auto)SFX.tok();if(!SH.done)SH.listens++;drawListen();playSentence();}
@@ -388,21 +410,31 @@ function gotoSentence(d){const c=learning();if(!c||SH.phase==='rec'||SH.phase===
 const canRecord=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
 const recMime=()=>{for(const m of ['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg'])try{if(MediaRecorder.isTypeSupported(m))return m;}catch(e){}return '';};
 let REC=null;
-function killRec(){const r=REC;REC=null;if(!r)return;r.dead=true;try{r.mr&&r.mr.state!=='inactive'&&r.mr.stop();}catch(e){}try{r.stream&&r.stream.getTracks().forEach(t=>t.stop());}catch(e){}if(MICOPEN)afterMic();}
+function killRec(){const r=REC;REC=null;if(!r)return;r.dead=true;stopMeter(r);try{r.mr&&r.mr.state!=='inactive'&&r.mr.stop();}catch(e){}try{r.stream&&r.stream.getTracks().forEach(t=>t.stop());}catch(e){}if(MICOPEN)afterMic();}
 async function hushForMic(){MICOPEN=true;pausePlayer();try{const as=navigator.audioSession;if(as)as.type='play-and-record';}catch(e){}
   try{if(AC&&AC.state==='running')await Promise.race([AC.suspend(),sleep(250)]);}catch(e){}}
 function afterMic(){MICOPEN=false;ambient();rebuildAudio();}
 async function startRec(){if(!canRecord){toast('이 브라우저는 녹음을 지원하지 않아요');return;}
   if(!DB.settings.key.trim()){toast(errMsg(new Error('nokey')),3000);return;}
   SFX.tok();await sleep(60);
-  const r={chunks:[],dead:false};REC=r;SH.phase='rec';setMic('stop');
+  const r={chunks:[],dead:false};REC=r;SH.phase='rec';
   await hushForMic();if(r.dead)return;
   try{r.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});}
   catch(e){REC=null;SH.phase='idle';setMic('mic');afterMic();toast(e&&e.name==='NotAllowedError'?'마이크 권한을 허용해 주세요':'마이크를 열지 못했어요');return;}
   if(r.dead){try{r.stream.getTracks().forEach(t=>t.stop());}catch(e){}return;}
   const m=recMime();try{r.mr=new MediaRecorder(r.stream,m?{mimeType:m}:undefined);}catch(e){r.mr=new MediaRecorder(r.stream);}
-  r.mime=(r.mr.mimeType||m||'audio/mp4').split(';')[0];r.mr.ondataavailable=e=>{if(e.data&&e.data.size)r.chunks.push(e.data);};r.mr.start();r.t0=Date.now();}
-async function stopRec(){const r=REC;REC=null;if(!r)return;SH.phase='wait';setMic('wait');
+  r.mime=(r.mr.mimeType||m||'audio/mp4').split(';')[0];r.mr.ondataavailable=e=>{if(e.data&&e.data.size)r.chunks.push(e.data);};r.mr.start();r.t0=Date.now();setMic('stop');startMeter(r);}
+/* 말소리 표시: 조용하면 정지 사각형, 말하면 막대 5개가 목소리 크기대로 움직임 (녹음과 같은 마이크 소리를 읽기만 함) */
+function startMeter(r){try{const A=window.AudioContext||window.webkitAudioContext;if(!A)return;const ctx=new A();const an=ctx.createAnalyser();an.fftSize=512;
+  ctx.createMediaStreamSource(r.stream).connect(an);const buf=new Uint8Array(an.fftSize);let floor=0.01,lastLoud=0,on=false,t=0;const K=[.55,.85,1,.8,.6];
+  r.meter={ctx,raf:0};const tick=()=>{if(r.dead||REC!==r)return;an.getByteTimeDomainData(buf);let q=0;for(let i=0;i<buf.length;i++){const v=(buf[i]-128)/128;q+=v*v;}const rms=Math.sqrt(q/buf.length);
+    floor=rms<floor?floor*0.9+rms*0.1:floor*0.995+rms*0.005;const now=performance.now();if(rms>Math.max(0.018,floor*2.6))lastLoud=now;
+    const speak=now-lastLoud<260;if(speak!==on){on=speak;setMic(on?'wave':'stop');}
+    if(on&&now-t>60){t=now;const lv=Math.min(1,rms*9);$$('#micBtn .wv i').forEach((b,i)=>{b.style.height=Math.max(6,Math.round(8+lv*30*K[i]+Math.random()*8))+'px';});}
+    r.meter.raf=requestAnimationFrame(tick);};
+  if(ctx.state==='suspended')ctx.resume().catch(()=>{});tick();}catch(e){}}
+function stopMeter(r){const m=r&&r.meter;if(!m)return;r.meter=null;try{cancelAnimationFrame(m.raf);}catch(e){}try{m.ctx.close();}catch(e){}}
+async function stopRec(){const r=REC;REC=null;if(!r)return;stopMeter(r);SH.phase='wait';setMic('wait');
   const blob=await new Promise(res=>{let done=false;const fin=()=>{if(done)return;done=true;res(new Blob(r.chunks,{type:r.mime||'audio/mp4'}));};
     if(!r.mr){fin();return;}r.mr.onstop=()=>setTimeout(fin,30);try{r.mr.state!=='inactive'?r.mr.stop():fin();}catch(e){fin();}setTimeout(fin,2500);});
   try{r.stream&&r.stream.getTracks().forEach(t=>t.stop());}catch(e){}
@@ -586,3 +618,19 @@ if(window.YT&&YT.Player)ytInit();else{const iv=setInterval(()=>{if(window.YT&&YT
 if(learning())setTimeout(cueLearning,600);
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 ambient();
+
+/* ---------- 단어장 내보내기·가져오기 ---------- */
+$('#vExport').onclick=async()=>{SFX.tok();if(!DB.vocab.length){toast('저장한 단어가 없어요');return;}
+  const d=new Date(),p=n=>String(n).padStart(2,'0');const name=`goshe-단어장-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}.json`;
+  const body=JSON.stringify({goshe_vocab:1,saved:d.toISOString(),vocab:DB.vocab},null,1);
+  const file=new File([body],name,{type:'application/json'});
+  try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return;}}catch(e){if(e&&e.name==='AbortError')return;}
+  const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);};
+$('#vImport').onclick=()=>{SFX.tok();const f=$('#vFile');f.value='';f.click();};
+$('#vFile').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];if(!file)return;
+  let j=null;try{j=JSON.parse(await file.text());}catch(err){}
+  const list=j&&Array.isArray(j.vocab)?j.vocab:Array.isArray(j)?j:null;
+  if(!list){toast('내보낸 단어장 파일을 골라 주세요',2600);return;}
+  const have=new Set(DB.vocab.map(v=>v.en.toLowerCase()));let n=0;
+  list.forEach(v=>{if(!v||!v.en)return;const en=String(v.en).trim();if(!en||have.has(en.toLowerCase()))return;have.add(en.toLowerCase());DB.vocab.push({en,ko:String(v.ko||''),t:+v.t||Date.now()});n++;});
+  DB.vocab.sort((a,b)=>(b.t||0)-(a.t||0));save();renderVocab();toast(n?`${n}개 가져왔어요`:'새로 추가할 단어가 없어요');});

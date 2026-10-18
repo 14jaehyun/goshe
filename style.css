@@ -50,12 +50,14 @@ body.folded #fold i{border-bottom:none;border-top:6px solid #8a97a6}
 #paste{height:48px;border-radius:12px;background:var(--soft2);border:1.5px dashed #c9d6e2;display:flex;align-items:center;padding:0 6px 0 16px;gap:10px;color:var(--sub);font-size:14px;will-change:transform}
 #linkIn{flex:1;min-width:0;border:none;background:transparent;font-size:14px;color:var(--ink);outline:none}
 #linkIn::placeholder{color:var(--sub)}
-#addBtn{font-size:12px;font-weight:700;color:var(--navy);padding:10px}
+#addBtn{color:var(--navy);padding:8px;display:flex}
+#clipPin{flex:none}
 #clipList{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:12px}
 .clip{position:relative;height:62px;border-bottom:1px solid var(--line2);overflow:hidden}
 .clip.learning{border-bottom:2px solid var(--navy)}
 .clip:last-child:not(.empty){border-bottom:none}
 .clip.learning:last-child{border-bottom:2px solid var(--navy)}
+#clipList .clip:last-child:not(.empty){border-bottom:1px solid var(--line2)}
 .clip.empty{border-bottom:1px solid var(--line2)}
 .clip.empty:last-child{border-bottom:none}
 .clip .face{position:absolute;inset:0;background:#fff;display:flex;align-items:center;gap:12px;padding:0 2px;will-change:transform}
@@ -64,8 +66,8 @@ body.folded #fold i{border-bottom:none;border-top:6px solid #8a97a6}
 .cinfo{min-width:0;flex:1}
 .ct{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cs{font-size:11px;color:var(--faint);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.badge{font-size:11px;font-weight:700;color:var(--navy);flex:none;padding-right:2px}
-.under{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;font-size:13px;font-weight:700;padding:0 18px;opacity:0}
+.badge{font-size:11px;font-weight:700;color:var(--mint-ink);background:var(--mint-bg);border-radius:999px;padding:3px 9px;flex:none;margin-right:2px;letter-spacing:.02em}
+.under{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;font-size:13px;font-weight:700;padding:0 22px;opacity:0}
 .under.del{background:var(--soft);color:var(--sub);justify-content:flex-end}
 .under.load{background:var(--mint-bg);color:var(--mint-ink)}
 .cempty{font-size:13px;color:var(--faint);text-align:center;padding:40px 0;line-height:1.7}
@@ -140,6 +142,7 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 .toggle .pill{position:absolute;top:2px;bottom:2px;left:2px;width:30px;border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);transition:left .25s cubic-bezier(.3,.7,.3,1),width .25s cubic-bezier(.3,.7,.3,1)}
 #vCount{font-size:11px;color:var(--faint)}
 .vhead .toggle{margin-left:auto}
+.vio{color:var(--sub);padding:6px;display:flex}
 #vList{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .v{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
 .v:last-child{border-bottom:none}
@@ -199,3 +202,6 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 .listen.off{opacity:.4}
 .listen.sad{background:#a6caec}
 .under.load{justify-content:flex-start}
+
+.mic .wv{display:flex;align-items:center;gap:5px;height:40px}
+.mic .wv i{display:block;width:5px;height:8px;border-radius:3px;background:#fff}
