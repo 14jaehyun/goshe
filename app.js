@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.1.2 */
+/* Goshé. — 고성능 쉐도잉 v1.3.6 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
