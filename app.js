@@ -569,7 +569,6 @@ $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSettings(
     const from=dy;g.style.transform='';$('#sheet').style.background='';y0=null;
     if(from>90||v>0.5)closeSettings(from);else sheetAnim(from,0,220,'ease-out');});})();
 $('#sKey').addEventListener('input',e=>{DB.settings.key=e.target.value.trim();save();});
-$('#sYt').onclick=()=>{SFX.tok();window.open('https://accounts.google.com/ServiceLogin?service=youtube&continue='+encodeURIComponent('https://www.youtube.com/'),'_blank');};
 $('#sModel').addEventListener('input',e=>{DB.settings.model=e.target.value.trim()||DEFAULT_MODEL;save();});
 $('#sModel').addEventListener('blur',e=>{if(!e.target.value.trim())e.target.value=DEFAULT_MODEL;});
 $('#sPaste').onclick=async()=>{SFX.tok();let t='';try{t=await navigator.clipboard.readText();}catch(e){}
