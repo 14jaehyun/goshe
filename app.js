@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.1 */
+/* Goshé. — 고성능 쉐도잉 v1.1.1 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -215,7 +215,7 @@ function fillEmptyRows(){const box=$('#clipList');$$('#clipList .clip.empty').fo
   for(let i=0;i<n;i++){const e=document.createElement('div');e.className='clip empty';box.appendChild(e);}}
 /* 밀면 버튼이 드러나고, 드러난 버튼을 탭해야 실행 (아이폰은 탭으로만 파일 창을 열어줌) */
 let OPEN=null;
-function closeOpen(){if(!OPEN)return;const {face,del,load}=OPEN;face.style.transition='transform .2s';face.style.transform='';setTimeout(()=>{del.style.opacity=0;load.style.opacity=0;},200);OPEN=null;}
+function closeOpen(){if(!OPEN)return;const {face,del,load}=OPEN;del.style.pointerEvents=load.style.pointerEvents='none';face.style.transition='transform .2s';face.style.transform='';setTimeout(()=>{del.style.opacity=0;load.style.opacity=0;},200);OPEN=null;}
 function bindClip(el){const c=clipById(el.dataset.id),face=el.querySelector('.face'),del=el.querySelector('.del'),load=el.querySelector('.load');
   const me={el,face,del,load,dir:0,at:0};
   load.addEventListener('click',()=>{if(OPEN!==me||me.dir!==1||Date.now()-me.at<350)return;SFX.tok();closeOpen();pickScript(c);});
@@ -228,10 +228,10 @@ function bindClip(el){const c=clipById(el.dataset.id),face=el.querySelector('.fa
       if(c.id===DB.learningId){dialog(`이미 학습 중인 영상이에요<small>${esc(c.title||'')}</small>`,[{label:'확인',pri:true}]);return;}
       dialog(`이 영상으로 학습할까요?<small>${esc(c.title||'')}</small>`,[{label:'아니요'},{label:'네',pri:true,fn:()=>{DB.learningId=c.id;save();curVidCheck();renderClips();$('#clipList').scrollTop=0;}}]);},
     move:dx=>{el.classList.remove('pressed');const base=OPEN===me?(me.dir===1?160:-92):0;const x=base+dx;
-      face.style.transition='';face.style.transform=`translateX(${x}px)`;del.style.opacity=x<0?1:0;load.style.opacity=x>0?1:0;},
+      face.style.transition='';face.style.transform=`translateX(${x}px)`;del.style.opacity=x<0?1:0;load.style.opacity=x>0?1:0;del.style.pointerEvents=load.style.pointerEvents='none';},
     swipe:dx=>{me.at=Date.now();const base=OPEN===me?(me.dir===1?160:-92):0;const x=base+dx;face.style.transition='transform .2s';
-      if(x>60){me.dir=1;OPEN=me;face.style.transform='translateX(160px)';load.style.opacity=1;del.style.opacity=0;SFX.tok();}
-      else if(x<-50){me.dir=-1;OPEN=me;face.style.transform='translateX(-92px)';del.style.opacity=1;load.style.opacity=0;SFX.tok();}
+      if(x>60){me.dir=1;OPEN=me;face.style.transform='translateX(160px)';load.style.opacity=1;del.style.opacity=0;load.style.pointerEvents='auto';del.style.pointerEvents='none';SFX.tok();}
+      else if(x<-50){me.dir=-1;OPEN=me;face.style.transform='translateX(-92px)';del.style.opacity=1;load.style.opacity=0;del.style.pointerEvents='auto';load.style.pointerEvents='none';SFX.tok();}
       else{OPEN=me;closeOpen();}}});}
 function curVidCheck(){/* 학습 클립이 바뀌면 다음 쉐도잉·스크립트 진입 때 그 영상으로 */}
 function removeClip(c){DB.clips=DB.clips.filter(x=>x!==c);if(DB.learningId===c.id){const n=sortedClips().find(x=>x.sents)||DB.clips[0];DB.learningId=n?n.id:null;}save();renderClips();}
@@ -506,7 +506,7 @@ function renderVocab(){const q=$('#vSearch').value.trim().toLowerCase();const li
 $('#vSearch').addEventListener('input',()=>{renderVocab();$('#vClear').classList.toggle('hidden',!$('#vSearch').value);});
 $('#vSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();renderVocab();e.target.blur();}});
 $('#vClear').addEventListener('pointerdown',e=>e.preventDefault());
-$('#vClear').addEventListener('click',()=>{SFX.tok();const i=$('#vSearch');i.focus();i.setSelectionRange(0,i.value.length);});
+$('#vClear').addEventListener('click',()=>{const i=$('#vSearch');i.focus();i.setSelectionRange(0,i.value.length);});
 
 /* ---------- 설정 ---------- */
 function usageHTML(){const U=DB.usage;const ks=Object.keys(USAGE_TAGS);const f=n=>(n||0).toLocaleString('ko-KR');
@@ -518,12 +518,25 @@ function usageHTML(){const U=DB.usage;const ks=Object.keys(USAGE_TAGS);const f=n
   <div class="small ureset" style="margin-top:6px">${new Date(U.since).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}부터<button id="uReset">초기화</button></div>`;}
 document.addEventListener('click',e=>{if(!e.target.closest('#uReset'))return;SFX.tok();
   dialog('토큰 사용량을 초기화할까요?<small>지금부터 다시 0부터 세요</small>',[{label:'취소'},{label:'초기화',pri:true,fn:()=>{DB.usage={since:Date.now(),rows:{}};save();$('#usage').innerHTML=usageHTML();}}]);});
-function openSettings(){SFX.tok();$('#sKey').value=DB.settings.key;$('#sModel').value=DB.settings.model;$('#usage').innerHTML=usageHTML();clearTimeout(closingT);$('#sheet').classList.remove('closing','hidden');}
-let closingT=null;function closeSettings(){const sh=$('#sheet');if(sh.classList.contains('hidden')||sh.classList.contains('closing'))return;sh.classList.add('closing');
-  clearTimeout(closingT);closingT=setTimeout(()=>{sh.classList.add('hidden');sh.classList.remove('closing');},1000);}
+function openSettings(){SFX.tok();$('#sKey').value=DB.settings.key;$('#sModel').value=DB.settings.model;$('#usage').innerHTML=usageHTML();const sh=$('#sheet');delete sh.dataset.closing;sh.classList.remove('hidden');sheetAnim('translateY(100%)',0,1000,'cubic-bezier(.22,.8,.24,1)');}
+/* 설정창: 올라올 땐 1초, 내려갈 땐 0.5초. 아래로 끌면 손가락을 따라 내려가고, 놓으면 마저 내려가거나 제자리로 */
+const DIM='rgba(15,21,29,.35)';let SHEETA=[];
+function sheetAnim(fromY,toY,dur,ease,done){const sh=$('#sheet'),g=$('.sheetin');SHEETA.forEach(a=>a.cancel());const H=g.offsetHeight||600;
+  const op=y=>`rgba(15,21,29,${(.35*(1-Math.min(1,y/H))).toFixed(3)})`;const ty=y=>typeof y==='string'?y:`translateY(${y}px)`;
+  const yf=typeof fromY==='string'?H:fromY,yt=typeof toY==='string'?H:toY;
+  SHEETA=[g.animate([{transform:ty(fromY)},{transform:ty(toY)}],{duration:dur,easing:ease,fill:'forwards'}),sh.animate([{background:op(yf)},{background:op(yt)}],{duration:dur,easing:ease,fill:'forwards'})];
+  SHEETA[0].onfinish=()=>{done&&done();};}
+function closeSettings(fromY=0){const sh=$('#sheet');if(sh.classList.contains('hidden')||sh.dataset.closing)return;sh.dataset.closing='1';
+  sheetAnim(fromY,'translateY(100%)',500,'cubic-bezier(.45,0,.8,.5)',()=>{sh.classList.add('hidden');delete sh.dataset.closing;SHEETA.forEach(a=>a.cancel());SHEETA=[];});}
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSettings();});
-(()=>{let y0=null;const g=$('.sheetin');g.addEventListener('touchstart',e=>{y0=g.scrollTop<=0?e.touches[0].clientY:null;},{passive:true});
-  g.addEventListener('touchend',e=>{if(y0!==null&&e.changedTouches[0].clientY-y0>90)closeSettings();y0=null;});})();
+(()=>{const g=$('.sheetin');let y0=null,dy=0,last=[];
+  g.addEventListener('touchstart',e=>{if($('#sheet').dataset.closing){y0=null;return;}y0=g.scrollTop<=0?e.touches[0].clientY:null;dy=0;last=[];},{passive:true});
+  g.addEventListener('touchmove',e=>{if(y0===null)return;const y=e.touches[0].clientY;dy=Math.max(0,y-y0);if(dy<=0)return;e.preventDefault();
+    last.push([Date.now(),y]);if(last.length>5)last.shift();SHEETA.forEach(a=>a.cancel());SHEETA=[];
+    g.style.transform=`translateY(${dy}px)`;$('#sheet').style.background=`rgba(15,21,29,${(.35*(1-Math.min(1,dy/g.offsetHeight))).toFixed(3)})`;},{passive:false});
+  g.addEventListener('touchend',()=>{if(y0===null||dy<=0){y0=null;return;}const v=last.length>1?(last[last.length-1][1]-last[0][1])/Math.max(1,last[last.length-1][0]-last[0][0]):0;
+    const from=dy;g.style.transform='';$('#sheet').style.background='';y0=null;
+    if(from>90||v>0.5)closeSettings(from);else sheetAnim(from,0,220,'ease-out');});})();
 $('#sKey').addEventListener('input',e=>{DB.settings.key=e.target.value.trim();save();});
 $('#sYt').onclick=()=>{SFX.tok();window.open('https://accounts.google.com/ServiceLogin?service=youtube&continue='+encodeURIComponent('https://www.youtube.com/'),'_blank');};
 $('#sModel').addEventListener('input',e=>{DB.settings.model=e.target.value.trim()||DEFAULT_MODEL;save();});
