@@ -210,4 +210,3 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 #shCount{cursor:pointer;padding:6px 0 6px 12px;margin-top:-6px;margin-bottom:-6px}
 #shCount .goin{width:2.6em;border:none;outline:none;background:transparent;font:inherit;font-size:11px;color:var(--ink);caret-color:var(--mint);text-align:right;padding:0;margin:0}
 #shCount .goin::placeholder{color:var(--faint)}
-#shCount .goin::selection{background:var(--mint-bg);color:var(--mint-ink)}
