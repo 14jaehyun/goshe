@@ -555,7 +555,6 @@ function movePill(){const t=$('#vToggle'),b=t.querySelector(`button[data-m="${DB
 $$('#vToggle button').forEach(b=>b.onclick=()=>{SFX.tok();DB.ui.vmode=b.dataset.m;save();movePill();applyVmode();});
 function applyVmode(){const l=$('#vList');l.classList.toggle('m-en',DB.ui.vmode==='en');l.classList.toggle('m-ko',DB.ui.vmode==='ko');}
 function renderVocab(){const q=$('#vSearch').value.trim().toLowerCase();const list=DB.vocab.filter(v=>!q||v.en.toLowerCase().includes(q)||v.ko.includes(q));
-  $('#vCount').textContent=DB.vocab.length?DB.vocab.length+'개':'';
   const box=$('#vList');applyVmode();
   if(!DB.vocab.length){box.innerHTML='<div class="vempty">쉐도잉 탭에서 단어를 꾹 누르고<br><b>저장</b>하면 여기에 모여요</div>';return;}
   if(!list.length){box.innerHTML='<div class="vempty">찾는 단어가 없어요</div>';return;}
@@ -619,18 +618,24 @@ if(learning())setTimeout(cueLearning,600);
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
 ambient();
 
-/* ---------- 단어장 내보내기·가져오기 ---------- */
+/* ---------- 단어장 내보내기·가져오기 (CSV: 제목 줄 없이 한국어, 영어 / 단어장 순서 그대로) ---------- */
+const csvCell=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+function parseCSV(t){t=String(t).replace(/^\uFEFF/,'');const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<t.length;i++){const ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){f+='"';i++;}else q=false;}else f+=ch;continue;}
+    if(ch==='"')q=true;else if(ch===','){row.push(f);f='';}else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&t[i+1]==='\n')i++;row.push(f);rows.push(row);row=[];f='';}else f+=ch;}
+  if(f!==''||row.length){row.push(f);rows.push(row);}return rows;}
 $('#vExport').onclick=async()=>{SFX.tok();if(!DB.vocab.length){toast('저장한 단어가 없어요');return;}
-  const d=new Date(),p=n=>String(n).padStart(2,'0');const name=`goshe-단어장-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}.json`;
-  const body=JSON.stringify({goshe_vocab:1,saved:d.toISOString(),vocab:DB.vocab},null,1);
-  const file=new File([body],name,{type:'application/json'});
+  const d=new Date(),p=n=>String(n).padStart(2,'0');const name=`goshe-단어장-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}.csv`;
+  const body='\uFEFF'+DB.vocab.map(v=>csvCell(v.ko)+','+csvCell(v.en)).join('\r\n')+'\r\n';
+  const file=new File([body],name,{type:'text/csv'});
   try{if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file]});return;}}catch(e){if(e&&e.name==='AbortError')return;}
   const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);};
 $('#vImport').onclick=()=>{SFX.tok();const f=$('#vFile');f.value='';f.click();};
 $('#vFile').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];if(!file)return;
-  let j=null;try{j=JSON.parse(await file.text());}catch(err){}
-  const list=j&&Array.isArray(j.vocab)?j.vocab:Array.isArray(j)?j:null;
-  if(!list){toast('내보낸 단어장 파일을 골라 주세요',2600);return;}
+  const rows=parseCSV(await file.text()).map(r=>r.map(x=>x.trim())).filter(r=>r.some(Boolean));
+  const HAN=/[\uAC00-\uD7A3]/;const list=rows.map(r=>{let [ko='',en='']=r;if(!HAN.test(ko)&&HAN.test(en))[ko,en]=[en,ko];return {ko,en};}).filter(v=>v.en);
+  if(!list.length){toast('내보낸 단어장 CSV 파일을 골라 주세요',2600);return;}
   const have=new Set(DB.vocab.map(v=>v.en.toLowerCase()));let n=0;
-  list.forEach(v=>{if(!v||!v.en)return;const en=String(v.en).trim();if(!en||have.has(en.toLowerCase()))return;have.add(en.toLowerCase());DB.vocab.push({en,ko:String(v.ko||''),t:+v.t||Date.now()});n++;});
-  DB.vocab.sort((a,b)=>(b.t||0)-(a.t||0));save();renderVocab();toast(n?`${n}개 가져왔어요`:'새로 추가할 단어가 없어요');});
+  list.forEach(v=>{const k=v.en.toLowerCase();if(have.has(k))return;have.add(k);DB.vocab.push({en:v.en,ko:v.ko});n++;});
+  save();renderVocab();toast(n?`${n}개 가져왔어요`:'새로 추가할 단어가 없어요');});
