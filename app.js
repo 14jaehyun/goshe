@@ -1,6 +1,6 @@
-/* Goshé. — 고성능 쉐도잉 v1.0.13 */
+/* Goshé. — 고성능 쉐도잉 v1.1 */
 'use strict';
-const VERSION='1.0.13';
+const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -99,7 +99,9 @@ let YTP=null,ytReady=false,curVid='',playMon=null,PLAY=null,ytQueue=null;
 function ytInit(){if(YTP||!window.YT||!YT.Player)return;
   YTP=new YT.Player('player',{width:'100%',height:'100%',playerVars:{playsinline:1,controls:0,disablekb:1,rel:0,iv_load_policy:3,fs:0,cc_load_policy:0,modestbranding:1,origin:location.origin},
     events:{onReady:()=>{ytReady=true;$('#noVideo').classList.add('hidden');if(ytQueue){const q=ytQueue;ytQueue=null;q();}},
-      onStateChange:e=>{if(e.data===YT.PlayerState.PLAYING){fillTitle();}}}});}
+      onStateChange:e=>{if(e.data===YT.PlayerState.PLAYING){fillTitle();noCaptions();}},onApiChange:noCaptions}});}
+/* 영상 자막 끄기 — 쉐도잉은 소리만 듣고 맞히는 거라 자막이 보이면 정답이 미리 보임 */
+function noCaptions(){try{YTP.setOption('captions','track',{});}catch(e){}try{YTP.unloadModule('captions');}catch(e){}try{YTP.unloadModule('cc');}catch(e){}}
 window.onYouTubeIframeAPIReady=ytInit;
 function whenYT(fn){if(ytReady&&YTP)return fn();ytQueue=fn;ytInit();}
 function fillTitle(){try{const d=YTP.getVideoData();const c=DB.clips.find(c=>c.vid===d.video_id);if(c&&d.title&&(!c.title||c.title===c.vid)){c.title=d.title;save();renderClips();}}catch(e){}}
@@ -501,7 +503,10 @@ function renderVocab(){const q=$('#vSearch').value.trim().toLowerCase();const li
     gesture(el,{move:dx=>{dx=Math.min(0,dx);face.style.transition='';face.style.transform=`translateX(${dx}px)`;del.style.opacity=dx<0?1:0;},
       swipe:dx=>{face.style.transition='transform .2s';if(dx<-el.clientWidth*0.3){SFX.tok();face.style.transform='translateX(-100%)';setTimeout(()=>{DB.vocab=DB.vocab.filter(v=>v.en!==el.dataset.en);save();renderVocab();},200);}
         else{face.style.transform='';setTimeout(()=>del.style.opacity=0,200);}}});});}
-$('#vSearch').addEventListener('input',renderVocab);
+$('#vSearch').addEventListener('input',()=>{renderVocab();$('#vClear').classList.toggle('hidden',!$('#vSearch').value);});
+$('#vSearch').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();renderVocab();e.target.blur();}});
+$('#vClear').addEventListener('pointerdown',e=>e.preventDefault());
+$('#vClear').addEventListener('click',()=>{SFX.tok();const i=$('#vSearch');i.focus();i.setSelectionRange(0,i.value.length);});
 
 /* ---------- 설정 ---------- */
 function usageHTML(){const U=DB.usage;const ks=Object.keys(USAGE_TAGS);const f=n=>(n||0).toLocaleString('ko-KR');
@@ -513,8 +518,9 @@ function usageHTML(){const U=DB.usage;const ks=Object.keys(USAGE_TAGS);const f=n
   <div class="small ureset" style="margin-top:6px">${new Date(U.since).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}부터<button id="uReset">초기화</button></div>`;}
 document.addEventListener('click',e=>{if(!e.target.closest('#uReset'))return;SFX.tok();
   dialog('토큰 사용량을 초기화할까요?<small>지금부터 다시 0부터 세요</small>',[{label:'취소'},{label:'초기화',pri:true,fn:()=>{DB.usage={since:Date.now(),rows:{}};save();$('#usage').innerHTML=usageHTML();}}]);});
-function openSettings(){SFX.tok();$('#sKey').value=DB.settings.key;$('#sModel').value=DB.settings.model;$('#usage').innerHTML=usageHTML();$('#sheet').classList.remove('hidden');}
-function closeSettings(){$('#sheet').classList.add('hidden');}
+function openSettings(){SFX.tok();$('#sKey').value=DB.settings.key;$('#sModel').value=DB.settings.model;$('#usage').innerHTML=usageHTML();clearTimeout(closingT);$('#sheet').classList.remove('closing','hidden');}
+let closingT=null;function closeSettings(){const sh=$('#sheet');if(sh.classList.contains('hidden')||sh.classList.contains('closing'))return;sh.classList.add('closing');
+  clearTimeout(closingT);closingT=setTimeout(()=>{sh.classList.add('hidden');sh.classList.remove('closing');},1000);}
 $('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeSettings();});
 (()=>{let y0=null;const g=$('.sheetin');g.addEventListener('touchstart',e=>{y0=g.scrollTop<=0?e.touches[0].clientY:null;},{passive:true});
   g.addEventListener('touchend',e=>{if(y0!==null&&e.changedTouches[0].clientY-y0>90)closeSettings();y0=null;});})();

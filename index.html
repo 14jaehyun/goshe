@@ -11,7 +11,7 @@
 <title>Goshé.</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=1.0.13">
+<link rel="stylesheet" href="style.css?v=1.1">
 </head>
 <body>
 <div id="app">
@@ -67,7 +67,7 @@
     <section class="page" id="pVocab">
       <div class="vhead"><span id="vCount"></span><div class="toggle" id="vToggle"><span class="pill"></span><button data-m="ko">한</button><button data-m="en">영</button><button data-m="both">둘 다</button></div></div>
       <div id="vList"></div>
-      <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa7b5" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="vSearch" type="search" placeholder="저장한 단어 검색" autocomplete="off"></div>
+      <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa7b5" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="vSearch" type="search" enterkeyhint="search" placeholder="저장한 단어 검색" autocomplete="off"><button id="vClear" class="hidden" aria-label="검색어 선택"><svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="8" fill="#c3ccd6"/><path d="M5.3 5.3l5.4 5.4M10.7 5.3l-5.4 5.4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
     </section>
   </main>
 
@@ -90,10 +90,9 @@
     <div class="inp"><input id="sModel" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
     <div class="fl">유튜브 프리미엄 (광고 없이 보기)</div>
     <button class="ytlogin" id="sYt">유튜브 로그인</button>
-    <div class="small">구글 로그인 화면이 열려요. 로그인 후 앱으로 돌아와 영상을 다시 재생해 보세요. (적용되는지 테스트 중)</div>
     <div class="fl">토큰 사용량</div>
     <div id="usage"></div>
-    <div class="ver">Goshé. v1.0.13</div>
+    <div class="ver">Goshé. v1.1</div>
   </div>
 </div>
 
@@ -101,6 +100,6 @@
 <div id="dlg" class="hidden"><div class="dlgin"><div id="dlgText"></div><div class="dlgbtns" id="dlgBtns"></div></div></div>
 
 <script src="https://www.youtube.com/iframe_api" async></script>
-<script src="app.js?v=1.0.13"></script>
+<script src="app.js?v=1.1"></script>
 </body>
 </html>

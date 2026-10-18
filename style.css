@@ -153,6 +153,12 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 .search{flex:none;height:44px;margin:8px 0 10px;border-radius:12px;background:var(--soft2);border:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 14px;color:var(--faint);font-size:14px}
 .search input{flex:1;min-width:0;border:none;background:transparent;outline:none;font-size:14px;color:var(--ink)}
 .search input::-webkit-search-cancel-button{-webkit-appearance:none}
+#vClear{flex:none;width:28px;height:28px;margin-right:-6px;display:flex;align-items:center;justify-content:center}
+#vClear.hidden{display:none}
+#sheet.closing{animation:undim 1s ease-in forwards}
+#sheet.closing .sheetin{animation:down 1s cubic-bezier(.6,0,.75,.2) forwards}
+@keyframes down{to{transform:translateY(100%)}}
+@keyframes undim{to{background:rgba(15,21,29,0)}}
 
 /* 설정 시트 */
 #sheet{position:fixed;inset:0;z-index:50;background:rgba(15,21,29,.35);display:flex;align-items:flex-end;justify-content:center}
