@@ -61,7 +61,8 @@ def group(words):
     def flush():
         if cur:
             out.append({"start": round(cur[0]["s"], 2), "end": round(cur[-1]["e"], 2),
-                        "en": re.sub(r"\s+", " ", "".join(w["w"] for w in cur)).strip()})
+                        "en": re.sub(r"\s+", " ", "".join(w["w"] for w in cur)).strip(),
+                        "w": [[w["w"].strip(), round(w["s"], 2), round(w["e"], 2)] for w in cur if w["w"].strip()]})
             cur.clear()
     for i, w in enumerate(words):
         if cur and w["s"] - cur[-1]["e"] > 1.0:      # 1초 넘게 쉬면 무조건 새 문장
@@ -95,7 +96,8 @@ def make(link):
         if "_model" not in globals():
             _model = WhisperModel(MODEL, device="cpu", compute_type="int8")
         segs, _ = _model.transcribe(load_audio(path), language="en", word_timestamps=True, vad_filter=True,
-                                    condition_on_previous_text=False)
+                                    condition_on_previous_text=False,
+                                    initial_prompt="Hello. How are you? I'm fine, thanks. Wait, what? No, no, no. Okay.")
         words = []
         for s in segs:
             for w in (s.words or []):
@@ -106,7 +108,7 @@ def make(link):
         safe = re.sub(r'[\\/:*?"<>|]+', " ", title).strip()[:60] or vid
         f = os.path.join(out_dir(), f"{safe}.goshe.json")
         with open(f, "w", encoding="utf-8") as fp:
-            json.dump({"goshe": 1, "vid": vid, "title": title, "sents": sents}, fp, ensure_ascii=False, indent=0)
+            json.dump({"goshe": 2, "vid": vid, "title": title, "sents": sents}, fp, ensure_ascii=False, indent=0)
         print(f"✓ {len(sents)}문장 → {f}")
     except Exception as e:
         print("! 실패:", e)

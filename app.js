@@ -248,11 +248,36 @@ $('#fileIn').addEventListener('change',async e=>{const file=e.target.files&&e.ta
 /* 구간 = Whisper가 잡은 실제 시작·끝 + 앞뒤 여유. 여유는 이웃 문장 안으로는 들어가지 않음 */
 function rangeOf(c,i){const L=c.sents,s=L[i],p=L[i-1],n=L[i+1];
   const a=Math.max(p?p.end-0.05:0,s.start-PRE,0);const b=Math.min(n?n.start+0.05:1e9,s.end+POST);return [Math.min(a,s.start),Math.max(b,s.end)];}
+/* Whisper 줄 → Gemini가 문장 끝·화자 바뀌는 곳에서 나누고 문장부호만 고침. 단어가 원문과 똑같을 때만 반영, 시간은 단어 시간 그대로 */
+const nw=t=>String(t).toLowerCase().replace(/[^a-z0-9]/g,'');
+async function splitSents(sents){const out=sents.map(x=>[x]);const idx=sents.map((x,i)=>x.w&&x.w.length>=4?i:-1).filter(i=>i>=0);
+  for(let k=0;k<idx.length;k+=25){const part=idx.slice(k,k+25);
+    const prompt=`These are consecutive transcript lines from an English video, usually a fast dialogue between several people. Lines may lack punctuation and may contain more than one sentence or more than one speaker.
+For each line, split it into pieces: start a new piece at every sentence end and wherever the speaker changes. Do not split in the middle of a sentence.
+Keep every word exactly as given, in the same order — you may only add punctuation and fix capitalization.
+Return JSON only: {"<number>":["piece", "piece", ...], ...} for every number.
+
+Context (whole nearby lines, do not split these unless numbered below):
+${sents.slice(Math.max(0,part[0]-3),part[part.length-1]+4).map(x=>x.en).join('\n')}
+
+Lines to split:
+${part.map(i=>`${i}: ${sents[i].en}`).join('\n')}`;
+    let m=null;try{m=parseJSON(await gemini([{text:prompt}],'script',{timeout:90000,wait429:true,config:{maxOutputTokens:8192}}));}catch(e){if(/키|모델/.test(e.message||''))break;}
+    if(!m)continue;
+    part.forEach(i=>{const pcs=m[i]||m[String(i)];const W=sents[i].w;if(!Array.isArray(pcs)||!pcs.length)return;
+      const orig=W.map(w=>nw(w[0])).filter(Boolean);const rows=[];let at=0,ok=true;const ww=W.filter(w=>nw(w[0]));
+      for(const pc of pcs){const pw=String(pc).trim().split(/\s+/).filter(t=>nw(t));if(!pw.length)continue;
+        for(let q=0;q<pw.length;q++)if(nw(pw[q])!==orig[at+q]){ok=false;break;}if(!ok)break;
+        rows.push({start:+ww[at][1],end:+ww[at+pw.length-1][2],en:String(pc).trim(),ko:''});at+=pw.length;}
+      if(ok&&at===orig.length&&rows.length)out[i]=rows;});}
+  return out.flat();}
 async function loadScript(c,j){
-  const sents=j.sents.map(x=>({start:+x.start,end:+x.end,en:String(x.en).trim(),ko:''}));
+  let sents=j.sents.map(x=>({start:+x.start,end:+x.end,en:String(x.en).trim(),ko:'',w:Array.isArray(x.w)?x.w:null}));
   if(j.title&&(!c.title||c.title===c.vid))c.title=j.title;
-  const done=()=>{c.busy='';c.sents=sents;delete c.names;c.noKo=sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
+  const done=()=>{c.busy='';sents.forEach(x=>delete x.w);c.sents=sents;delete c.names;c.noKo=sents.every(s=>!s.ko);c.lastIdx=0;c.scIdx=0;if(!DB.learningId)DB.learningId=c.id;save();renderClips();};
   if(!DB.settings.key.trim()){done();toast('API 키가 없어서 해석 없이 불러왔어요',2800);return;}
+  if(sents.some(x=>x.w&&x.w.length>=4)){c.busy='문장 나누는 중…';renderClips();sents=await splitSents(sents);}
+  sents.forEach(x=>delete x.w);
   /* 20줄씩 해석 → 빠진 줄만 모아 최대 2번 더 요청. 한도(429)는 기다렸다 재시도 */
   const ask=async(list)=>{const prompt=`These are consecutive lines from an English video (often a dialogue). Translate each line into natural, conversational Korean, using the other lines as context.
 Each line is "<number>: <text>". Return JSON only: {"ko":{"<number>":"<Korean>", ...}} with every number. Do not skip any number.
