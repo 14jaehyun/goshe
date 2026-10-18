@@ -128,6 +128,8 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 #drumIn{padding:0}
 #drum p{font-size:13.5px;line-height:1.3;padding:3px 0;color:var(--ink);text-align:left;transform-origin:left center;scroll-snap-align:center;opacity:.22}
 #drum .pad{scroll-snap-align:none;opacity:0;pointer-events:none}
+#drum .noko{white-space:nowrap;margin-left:5px;font-size:11px;color:#d98a8a}
+#drum .noko i{display:inline-block;width:5px;height:5px;border-radius:50%;background:#e5a3a3;vertical-align:middle;margin-right:3px;position:relative;top:-1px}
 
 /* ④ 단어장 */
 #pVocab.on{display:flex;flex-direction:column}

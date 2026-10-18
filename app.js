@@ -463,7 +463,7 @@ const DR={idx:0,lastCenter:-1,raf:0,user:false,settleT:null,prog:false};
 function renderDrum(){const c=learning();const box=$('#drumIn'),msg=$('#scMsg');
   if(!c||!c.sents||!c.sents.length){box.innerHTML='';msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';$('.ctrl').style.visibility='hidden';return;}
   msg.innerHTML='';$('.ctrl').style.visibility='';
-  box.innerHTML='<div class="pad"></div>'+c.sents.map((s,i)=>`<p data-i="${i}">${esc(s.en)}</p>`).join('')+'<div class="pad"></div>';
+  box.innerHTML='<div class="pad"></div>'+c.sents.map((s,i)=>`<p data-i="${i}">${esc(s.en)}${s.ko?'':`<span class="noko"><i></i>(${i+1})</span>`}</p>`).join('')+'<div class="pad"></div>';
   DR.idx=Math.min(c.scIdx||0,c.sents.length-1);DR.lastCenter=DR.idx;drumPads();scrollDrumTo(DR.idx,false);}
 function drumPads(){const d=$('#drum');const h=d.clientHeight;$$('#drum .pad').forEach(p=>p.style.height=Math.max(0,h/2-12)+'px');shadeDrum();}
 function scrollDrumTo(i,smooth){const d=$('#drum'),p=$(`#drum p[data-i="${i}"]`);if(!p)return;DR.prog=true;
