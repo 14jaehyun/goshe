@@ -120,8 +120,6 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 /* ③ 스크립트 */
 #pScript.on{display:flex;flex-direction:column}
 .ctrl{flex:none;display:flex;align-items:center;justify-content:space-between;margin:2px 0 10px}
-.pn{display:flex;gap:8px}
-.pn button{width:40px;height:40px;border-radius:50%;background:var(--soft);display:flex;align-items:center;justify-content:center}
 #drum{flex:1;position:relative;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:8px}
 #drum::-webkit-scrollbar{display:none}
 #drumIn{padding:0}
@@ -139,6 +137,7 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 .toggle .pill{position:absolute;top:2px;bottom:2px;left:2px;width:30px;border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);transition:left .25s cubic-bezier(.3,.7,.3,1),width .25s cubic-bezier(.3,.7,.3,1)}
 .vhead .toggle{margin-left:auto}
 .vio{color:var(--sub);padding:6px;display:flex}
+.vio:disabled{color:#d3dbe3}   /* 되돌릴 단어가 없을 때 */
 #vList{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .v{position:relative;overflow:hidden;border-bottom:1px solid var(--line)}
 .v:last-child{border-bottom:none}
@@ -202,7 +201,6 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 .mic .wv{display:flex;align-items:center;gap:5px;height:40px}
 .mic .wv i{display:block;width:5px;height:8px;border-radius:3px;background:#fff}
 
-.pn[hidden]{display:none}
 /* 문장 번호 + 저장 아이콘 — 쉐도잉·스크립트 탭 같은 자리 */
 .cnt{position:absolute;top:4px;right:20px;height:16px;display:flex;align-items:center;gap:6px;z-index:3}
 .cnt em{font-style:normal;font-size:11px;line-height:16px;color:var(--faint);margin:0;text-align:right;font-variant-numeric:tabular-nums}   /* 폭은 영상의 전체 문장 수 자릿수로 고정 → 번호가 바뀌어도 저장 아이콘 자리 그대로 */
