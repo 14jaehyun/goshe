@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.5.1 */
+/* Goshé. — 고성능 쉐도잉 v1.5.2 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',press:'sfx/press.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.5.1').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.5.2').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -130,7 +130,7 @@ function setTab(t,sound){if(sound&&DB.ui.tab!==t)SFX.ding();
   const changed=DB.ui.tab!==t;DB.ui.tab=t;save();
   $$('.page').forEach(p=>p.classList.toggle('on',p.id===t));$$('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
   closeWord(true);
-  if(t==='pShadow')renderShadow(!!sound);
+  if(t==='pShadow'&&(changed||!sound))renderShadow(!!sound);   /* 쉐도잉 탭을 다시 눌러도 듣기 횟수·맞힌 단어 유지 */
   if(t==='pScript')renderDrum();
   if(t==='pClip')renderClips();
   if(changed||!sound)standbyFor(t);
@@ -362,7 +362,7 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   $('#shKo').textContent=s.ko||'';$('#shKo').classList.remove('on');
   $$('.dot').forEach(d=>d.classList.remove('f'));
   const L=$('#lights');L.classList.remove('ok','ng');$$('#lights .dot').forEach(d=>d.getAnimations().forEach(a=>a.cancel()));
-  $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');drawListen();
+  $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;drawBm();setMic('mic');drawListen();
   c.lastIdx=SH.idx;save();requestAnimationFrame(layout);
   }
 /* 사람 이름(별명 포함)은 처음부터 보여주고 판정에서 뺌. 지명·제목·브랜드는 숨김.
@@ -470,6 +470,26 @@ function peekWord(w){if(!w||w.classList.contains('r')||SH.done||SH.peeked||SH.ph
     tap:e=>peekWord(e.target.closest('#shSent .w')),
     long:e=>{const w=e.target.closest('#shSent .w');if(!w||!w.classList.contains('r')||SH.phase==='rec'||SH.phase==='wait')return;lw=w;openWord(+w.dataset.i);},
     swipe:dx=>{if(Math.abs(dx)>60)gotoSentence(dx<0?1:-1);},move:()=>{}});})();
+/* 문장 저장(즐겨찾기) — 영상마다 c.saved에 문장 번호. 아이콘 탭 = 저장/삭제, 꾹 = 저장된 문장 목록(설정창처럼 아래에서) */
+const SVI='<svg class="sv" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-6-5-6 5z" fill="currentColor"/></svg>';
+const isSaved=(c,i)=>!!(c&&Array.isArray(c.saved)&&c.saved.includes(i));
+const bmIdx=()=>DB.ui.tab==='pScript'?centerIndex():SH.idx;
+/* 번호 칸 폭 = 이 영상에서 가장 긴 번호(예: 120 / 120)의 실제 폭 → 번호가 바뀌어도 저장 아이콘 자리 고정 */
+let CNTW={n:-1,w:0};function cntWidth(n){if(CNTW.n===n)return CNTW.w;const m=document.createElement('em');m.textContent=`${n} / ${n}`;m.style.cssText='position:absolute;visibility:hidden';
+  let w=0;for(const host of [$('#shBm').parentNode,$('#scBm').parentNode]){host.appendChild(m);w=Math.ceil(m.getBoundingClientRect().width);m.remove();if(w)break;}   /* 보이는 탭에서 잼 */
+  if(w)CNTW={n,w};return w;}
+function drawBm(){const c=learning();const w=cntWidth(c&&c.sents?c.sents.length:1);if(w)$$('.cnt em').forEach(e=>e.style.minWidth=w+'px');$('#shBm').classList.toggle('on',isSaved(c,SH.idx));$('#scBm').classList.toggle('on',isSaved(c,$('#drum p')?centerIndex():DR.idx));}
+function toggleSave(){const c=learning();if(!c||!c.sents||!c.sents.length)return;const i=bmIdx();c.saved=Array.isArray(c.saved)?c.saved:[];
+  const k=c.saved.indexOf(i);if(k>=0)c.saved.splice(k,1);else{c.saved.push(i);c.saved.sort((a,b)=>a-b);}save();SFX.tok();
+  const p=$(`#drum p[data-i="${i}"]`);if(p){const sv=p.querySelector('.sv');if(k>=0)sv&&sv.remove();else if(!sv)p.insertAdjacentHTML('afterbegin',SVI);}drawBm();}
+function openSaved(){const c=learning();if(!c||!c.sents)return;SFX.click();const list=(c.saved||[]).filter(i=>c.sents[i]);
+  $('#savedList').innerHTML=list.length?list.map(i=>`<p data-i="${i}"><b>${i+1}</b><span>${esc(c.sents[i].en)}</span></p>`).join(''):'<p class="none">저장한 문장이 없어요</p>';
+  const sh=$('#sheet');delete sh.dataset.closing;sh.classList.remove('hidden');
+  $('#usage').innerHTML=usageHTML();$('#setBox').hidden=false;$('#savedBox').hidden=true;const H=$('#setBox').offsetHeight;   /* 설정창과 같은 높이로 올라오게 */
+  $('#setBox').hidden=true;$('#savedBox').hidden=false;$('#savedBox').style.minHeight=H+'px';$('.sheetin').scrollTop=0;sheetAnim('translateY(100%)',0,1000,'cubic-bezier(.22,.8,.24,1)');}
+$('#savedList').addEventListener('click',e=>{const p=e.target.closest('p[data-i]');if(!p)return;const i=+p.dataset.i;SFX.tok();closeSettings();   /* 목록에서 고르면 그 문장으로 */
+  if(DB.ui.tab==='pScript')drumGo(i);else if(SH.phase!=='rec'&&SH.phase!=='wait'){SH.idx=i;enterSentence(false);}});
+['#shBm','#scBm'].forEach(s=>{const b=$(s);b.addEventListener('pointerdown',e=>e.stopPropagation());gesture(b,{tap:()=>toggleSave(),long:()=>openSaved()});});
 /* 단어 뜻 팝업 */
 let WP=null;
 const CHECK='<svg width="20" height="20" viewBox="0 0 24 24"><path d="M4.5 12.5 L9.5 17.5 L19.5 6.5" fill="none" stroke="#1E9E6A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" pathLength="100" stroke-dasharray="100" stroke-dashoffset="100"/></svg>';
@@ -514,7 +534,7 @@ const DR={idx:0,lastCenter:-1,raf:0,user:false,settleT:null,prog:false};
 function renderDrum(){const c=learning();const box=$('#drumIn'),msg=$('#scMsg');
   if(!c||!c.sents||!c.sents.length){box.innerHTML='';$('#scCount').textContent='';msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';$('.ctrl').style.visibility='hidden';return;}
   msg.innerHTML='';$('.ctrl').style.visibility='';
-  box.innerHTML='<div class="pad"></div>'+c.sents.map((s,i)=>`<p data-i="${i}">${esc(s.en)}${s.ko?'':`<span class="noko"><i></i>(${i+1})</span>`}</p>`).join('')+'<div class="pad"></div>';
+  box.innerHTML='<div class="pad"></div>'+c.sents.map((s,i)=>`<p data-i="${i}">${isSaved(c,i)?SVI:''}${esc(s.en)}${s.ko?'':`<span class="noko"><i></i>(${i+1})</span>`}</p>`).join('')+'<div class="pad"></div>';
   DR.idx=Math.min(c.scIdx||0,c.sents.length-1);DR.lastCenter=DR.idx;drumPads();scrollDrumTo(DR.idx,false);}
 function drumPads(){const d=$('#drum');const h=d.clientHeight;$$('#drum .pad').forEach(p=>p.style.height=Math.max(0,h/2-12)+'px');shadeDrum();}
 function scrollDrumTo(i,smooth){const d=$('#drum'),p=$(`#drum p[data-i="${i}"]`);if(!p)return;DR.prog=true;
@@ -524,11 +544,13 @@ function centerIndex(){const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2
   for(let i=lo;i<hi;i++){const p=ps[i];const c=p.offsetTop+p.offsetHeight/2;const dd=Math.abs(c-mid);if(dd<bd){bd=dd;best=i;}}
   if(bd>200){for(let i=0;i<ps.length;i++){const p=ps[i];const dd=Math.abs(p.offsetTop+p.offsetHeight/2-mid);if(dd<bd){bd=dd;best=i;}}}return best;}
 const OPS=[1,.72,.6,.5,.42,.36,.3,.26,.22];
-function scCount(i){const c=learning();if(i==null)i=DR.idx;$('#scCount').textContent=c&&c.sents&&c.sents.length?`${Math.min(i,c.sents.length-1)+1} / ${c.sents.length}`:'';}   // 돌리는 중에는 가운데 문장 번호
+function scCount(i){const c=learning();if(i==null)i=DR.idx;$('#scCount').textContent=c&&c.sents&&c.sents.length?`${Math.min(i,c.sents.length-1)+1} / ${c.sents.length}`:'';
+  $$('#drum p.cur').forEach(p=>{if(+p.dataset.i!==i)p.classList.remove('cur');});const cp=$(`#drum p[data-i="${i}"]`);cp&&cp.classList.add('cur');drawBm();}   // 돌리는 중에는 가운데 문장 번호
 function shadeDrum(){const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2;const ci=centerIndex();scCount(ci);const ps=$$('#drum p');
   for(let i=Math.max(0,ci-25);i<Math.min(ps.length,ci+26);i++){const p=ps[i];const c=p.offsetTop+p.offsetHeight/2;const dist=Math.abs(c-mid)/24;
     const k=Math.min(OPS.length-1,dist);const lo=Math.floor(k),fr=k-lo;const op=OPS[lo]+(OPS[Math.min(OPS.length-1,lo+1)]-OPS[lo])*fr;
-    p.style.opacity=op.toFixed(3);p.style.transform=`scaleY(${Math.max(.62,1-dist*.04).toFixed(3)})`;}
+    p.style.opacity=op.toFixed(3);p.style.transform=`scaleY(${Math.max(.62,1-dist*.04).toFixed(3)})`;
+    const g=Math.max(0,1-dist)*.4;p.style.textShadow=g>.004?`0 0 4px rgba(79,109,138,${g.toFixed(3)}),0 0 2px rgba(79,109,138,${g.toFixed(3)})`:'';}   /* 가운데 문장 남색 빛 — 드럼이 움직인 만큼 옮겨감 */
   if(ci!==DR.lastCenter){DR.lastCenter=ci;if(DR.user)SFX.tick();}   /* 손으로 돌릴 때만 틱 (탭 전환·영상 접기로 칸 크기가 바뀔 땐 조용히) */}
 $('#drum').addEventListener('scroll',()=>{if(!DR.raf)DR.raf=requestAnimationFrame(()=>{DR.raf=0;shadeDrum();});
   clearTimeout(DR.settleT);DR.settleT=setTimeout(()=>{if(DR.touch)return;if(DR.prog&&!DR.user)return;const ci=centerIndex();if(ci!==DR.idx){DR.idx=ci;scCount();const c=learning();if(c){c.scIdx=ci;save();}if(DR.user)playDrum();}DR.user=false;},160);},{passive:true});
@@ -575,7 +597,7 @@ function usageHTML(){const U=DB.usage;const ks=Object.keys(USAGE_TAGS);const f=n
   <div class="small ureset" style="margin-top:6px">${new Date(U.since).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}부터<button id="uReset">초기화</button></div>`;}
 document.addEventListener('click',e=>{if(!e.target.closest('#uReset'))return;SFX.tok();
   dialog('토큰 사용량을 초기화할까요?<small>지금부터 다시 0부터 세요</small>',[{label:'취소'},{label:'초기화',pri:true,fn:()=>{DB.usage={since:Date.now(),rows:{}};save();$('#usage').innerHTML=usageHTML();}}]);});
-function openSettings(){SFX.tok();$('#sKey').value=DB.settings.key;$('#sModel').value=DB.settings.model;$('#usage').innerHTML=usageHTML();const sh=$('#sheet');delete sh.dataset.closing;sh.classList.remove('hidden');sheetAnim('translateY(100%)',0,1000,'cubic-bezier(.22,.8,.24,1)');}
+function openSettings(){SFX.tok();$('#setBox').hidden=false;$('#savedBox').hidden=true;$('#sKey').value=DB.settings.key;$('#sModel').value=DB.settings.model;$('#usage').innerHTML=usageHTML();const sh=$('#sheet');delete sh.dataset.closing;sh.classList.remove('hidden');sheetAnim('translateY(100%)',0,1000,'cubic-bezier(.22,.8,.24,1)');}
 /* 설정창: 올라올 땐 1초, 내려갈 땐 0.5초. 아래로 끌면 손가락을 따라 내려가고, 놓으면 마저 내려가거나 제자리로 */
 const DIM='rgba(15,21,29,.35)';let SHEETA=[];
 function sheetAnim(fromY,toY,dur,ease,done){const sh=$('#sheet'),g=$('.sheetin');SHEETA.forEach(a=>a.cancel());const H=g.offsetHeight||600;
