@@ -530,8 +530,8 @@ function centerIndex(){const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2
   for(let i=lo;i<hi;i++){const p=ps[i];const c=p.offsetTop+p.offsetHeight/2;const dd=Math.abs(c-mid);if(dd<bd){bd=dd;best=i;}}
   if(bd>200){for(let i=0;i<ps.length;i++){const p=ps[i];const dd=Math.abs(p.offsetTop+p.offsetHeight/2-mid);if(dd<bd){bd=dd;best=i;}}}return best;}
 const OPS=[1,.72,.6,.5,.42,.36,.3,.26,.22];
-function scCount(){const c=learning();$('#scCount').textContent=c&&c.sents&&c.sents.length?`${DR.idx+1} / ${c.sents.length}`:'';}
-function shadeDrum(){scCount();const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2;const ci=centerIndex();const ps=$$('#drum p');
+function scCount(i){const c=learning();if(i==null)i=DR.idx;$('#scCount').textContent=c&&c.sents&&c.sents.length?`${Math.min(i,c.sents.length-1)+1} / ${c.sents.length}`:'';}   // 돌리는 중에는 가운데 문장 번호
+function shadeDrum(){const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2;const ci=centerIndex();scCount(ci);const ps=$$('#drum p');
   for(let i=Math.max(0,ci-25);i<Math.min(ps.length,ci+26);i++){const p=ps[i];const c=p.offsetTop+p.offsetHeight/2;const dist=Math.abs(c-mid)/24;
     const k=Math.min(OPS.length-1,dist);const lo=Math.floor(k),fr=k-lo;const op=OPS[lo]+(OPS[Math.min(OPS.length-1,lo+1)]-OPS[lo])*fr;
     p.style.opacity=op.toFixed(3);p.style.transform=`scaleY(${Math.max(.62,1-dist*.04).toFixed(3)})`;}
