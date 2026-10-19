@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.4.0 */
+/* Goshé. — 고성능 쉐도잉 v1.5.0 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -22,9 +22,14 @@ function toast(t,ms=2200){const d=document.createElement('div');d.className='toa
 /* ---------- 효과음 ---------- */
 let AC=null,OUT=null,MICOPEN=false;
 function ambient(){const s=navigator.audioSession;if(!s)return;try{if(s.type==='ambient')s.type='auto';s.type='ambient';}catch(e){}}
-function audio(){try{if(!AC||AC.state==='closed'){ambient();AC=new(window.AudioContext||window.webkitAudioContext)();OUT=AC.createGain();OUT.gain.value=0.05;OUT.connect(AC.destination);}
+function audio(){try{if(!AC||AC.state==='closed'){ambient();AC=new(window.AudioContext||window.webkitAudioContext)();OUT=AC.createGain();OUT.gain.value=0.05;OUT.connect(AC.destination);loadSamples(AC);}
   if(AC.state!=='running'&&!document.hidden){const p=AC.resume();if(p&&p.catch)p.catch(()=>{});}}catch(e){}return AC;}
-function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;audio();}
+function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const k in BUF)delete BUF[k];audio();}
+/* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
+const SMP={press:'sfx/press.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
+function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
+  fetch(SMP[k]+'?v=1.5.0').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol,t+0.004);g.gain.exponentialRampToValueAtTime(0.0001,t+dec);os.connect(g).connect(o);os.start(t);os.stop(t+dec+0.05);}
@@ -35,32 +40,17 @@ function coinHit(o,f0,t0,vol){const a=AC,s=a.currentTime+t0+0.01;
   [[1,1,0.35],[2.76,0.6,0.22],[5.40,0.4,0.12],[8.93,0.25,0.07],[13.3,0.15,0.04]].forEach(([r,amp,dec])=>{const os=a.createOscillator(),g=a.createGain();os.type='sine';os.frequency.value=f0*r;
     g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol*amp*0.35,s+0.0015);g.gain.setTargetAtTime(0,s+0.0015,dec);os.connect(g).connect(o);os.start(s);os.stop(s+dec*6);});
   noise(o,t0+0.01,0.004,vol*0.4,'highpass',3000);}
-function blipTick(o,t0,vol){const a=AC,s=a.currentTime+t0+0.01;[[1250,1],[1910,.9],[2640,1],[3960,.6],[7700,.35]].forEach(([f,amp])=>{const os=a.createOscillator(),g=a.createGain();os.type='sine';os.frequency.value=f;
-  g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol*amp*0.26,s+0.002);g.gain.setTargetAtTime(0,s+0.002,0.022);os.connect(g).connect(o);os.start(s);os.stop(s+0.15);});}
-function blipTone(o,f,t0,vol,tau){const a=AC,s=a.currentTime+t0+0.01;[[1,1],[2,.08]].forEach(([r,amp])=>{const os=a.createOscillator(),g=a.createGain();os.type='sine';os.frequency.value=f*r;
-  g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol*amp,s+0.006);g.gain.setValueAtTime(vol*amp,s+0.03);g.gain.setTargetAtTime(0,s+0.03,tau);os.connect(g).connect(o);os.start(s);os.stop(s+0.03+tau*7);});}
-/* 종소리: 맑게 길게 울리는 음 하나 (배음 + 긴 꼬리) */
-function bell(o,f0,t0,vol,ring){const a=AC,s=a.currentTime+t0+0.01;
-  [[1,1,ring],[2,.42,ring*.55],[3.01,.18,ring*.35],[4.2,.07,ring*.2]].forEach(([r,amp,dec])=>{const os=a.createOscillator(),g=a.createGain();os.type='sine';os.frequency.value=f0*r;
-    g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol*amp,s+0.004);g.gain.setTargetAtTime(0,s+0.004,dec/3);os.connect(g).connect(o);os.start(s);os.stop(s+dec*2.5);});}
-/* 한 번 듣고 맞혔을 때 — 디리링~ 후보 3개 (sfx.html에서 비교) */
-const PERFECT=[
-  o=>{[1046.5,1318.5,1568,2093].forEach((f,i)=>bell(o,f,i*0.085,i===3?0.26:0.2,i===3?1.1:0.35));},            // 1 · 도미솔도 올라가며 마지막이 길게
-  o=>{[2093,1568,1318.5,1046.5].forEach((f,i)=>bell(o,f,i*0.085,i===3?0.26:0.2,i===3?1.1:0.35));},            // 2 · 반대로 내려오기
-  o=>{[[1318.5,0],[1046.5,0.16],[1568,0.32]].forEach(([f,t],i)=>bell(o,f,t,0.24,i===2?1.2:0.55));},             // 3 · 딩동댕 (미-도-솔)
-];
-let PERFECT_PICK=0;
-/* 음량은 실제 소리 크기를 재서 서로 비슷하게 맞춘 값 */
+/* 음량은 실제 소리 크기를 재서 서로 비슷하게 맞춘 값 — 새 소리는 바꾸기 전 소리 크기, 단 버튼 '톡'보다 크지 않게 */
 const SFX={
   ding(){const o=bus(.15);if(!o)return;tone(o,1318.5,'sine',1,.45);tone(o,2637,'sine',.18,.2);},                 // A · 맑은 딩 — 하단 탭
   tok(){const o=bus(.38);if(!o)return;tone(o,2093,'triangle',.7,.16);tone(o,4186,'sine',.15,.08);},               // C · 유리 톡 — 버튼
-  click(){const o=bus(1.79);if(!o)return;noise(o,0,0.02,0.35,'highpass',3000);const a=AC,t=a.currentTime+0.011,os=a.createOscillator(),g=a.createGain();
-    os.type='square';os.frequency.setValueAtTime(220,t);os.frequency.linearRampToValueAtTime(110,t+0.05);g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.07,t+0.004);
-    g.gain.exponentialRampToValueAtTime(0.0008,t+0.06);os.connect(g).connect(o);os.start(t);os.stop(t+0.08);},                                     // 딸깍 — 꾹 눌러 팝업
+  click(){sample('press',.631);},                                                                                  // 딸깍 — 꾹 누르기 (낮은 음→높은 음)
   tick(){const o=bus(1.29);if(!o)return;noise(o,0,0.006,0.5,'highpass',5000);tone(o,3200,'sine',.18,.012);},        // 틱 — 스크립트 드럼
   ok(){const o=bus(.68);if(!o)return;coinHit(o,1390,0,0.2);coinHit(o,1850,0.055,0.22);coinHit(o,2450,0.11,0.3);},  // 성공 = 호감도 ↑
-  perfect(){const o=bus(.25);if(!o)return;PERFECT[PERFECT_PICK](o);},                                               // 한 번 듣고 맞힘 = 디리링~
-  ng(){const o=bus(.41);if(!o)return;blipTick(o,0,0.1);blipTone(o,830,0.09,0.27,0.06);},                          // 실패 = 점수 ↓
+  perfect(){sample('perfect',.208);},                                                                              // 한 번 듣고 맞힘 = 트럼펫 따-다~
+  ng(){sample('wrong',.208);},                                                                                     // 실패 = 정답 소리를 낮춰 거꾸로
+  swap(){sample('swap',.226);},                                                                                    // 학습 클립 교체 = 책장 넘김(거꾸로)
+  logo(){sample('logo',.244);},                                                                                    // 로고 기믹 = 낮은 뿅
 };
 document.addEventListener('pointerdown',()=>audio(),{capture:true,passive:true});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){try{AC&&AC.suspend();}catch(e){}}});
@@ -148,7 +138,7 @@ function setTab(t,sound){if(sound&&DB.ui.tab!==t)SFX.ding();
 $$('.tab').forEach(b=>b.onclick=()=>setTab(b.dataset.t,true));
 function setFold(f){document.body.classList.toggle('folded',f);DB.ui.folded=f;save();setTimeout(layout,270);}
 $('#fold').onclick=()=>{SFX.tok();setFold(!DB.ui.folded);};
-(()=>{const L=$('#logo');const on=()=>L.classList.add('on'),off=()=>L.classList.remove('on');
+(()=>{const L=$('#logo');const on=()=>{if(!L.classList.contains('on'))SFX.logo();L.classList.add('on');},off=()=>L.classList.remove('on');
   L.addEventListener('pointerdown',on);['pointerup','pointercancel','pointerleave'].forEach(e=>L.addEventListener(e,off));})();
 function layout(){
   // 쉐도잉: 접으면 버튼(과 그 위 듣기 횟수 점)도 비율 맞춰 위로
@@ -175,7 +165,7 @@ function gesture(el,h){let st=null;
 
 /* ---------- 확인창 ---------- */
 function dialog(html,btns){const d=$('#dlg');$('#dlgText').innerHTML=html;const box=$('#dlgBtns');box.innerHTML='';
-  btns.forEach(b=>{const x=document.createElement('button');x.textContent=b.label;if(b.pri)x.className='pri';x.onclick=()=>{SFX.tok();d.classList.add('hidden');b.fn&&b.fn();};box.appendChild(x);});
+  btns.forEach(b=>{const x=document.createElement('button');x.textContent=b.label;if(b.pri)x.className='pri';x.onclick=()=>{if(!b.silent)SFX.tok();d.classList.add('hidden');b.fn&&b.fn();};box.appendChild(x);});
   d.classList.remove('hidden');}
 $('#dlg').addEventListener('click',e=>{if(e.target.id==='dlg')$('#dlg').classList.add('hidden');});
 
@@ -218,7 +208,7 @@ function fillEmptyRows(){const box=$('#clipList');$$('#clipList .clip.empty').fo
   for(let i=0;i<n;i++){const e=document.createElement('div');e.className='clip empty';box.appendChild(e);}}
 /* 학습 영상 교체: 두 카드가 살짝 떠올라 자리를 맞바꿈. 바로 아래 0.5초 ~ 영상 펼친 화면 맨 아래 0.7초 (접으면 더 멀어져 최대 0.9초) */
 let SWAPPING=false;
-function swapLearning(c){const old=learning();const elA=$(`#clipList .clip[data-id="${c.id}"]`),elB=old&&$(`#clipPin .clip[data-id="${old.id}"]`);
+function swapLearning(c){SFX.swap();const old=learning();const elA=$(`#clipList .clip[data-id="${c.id}"]`),elB=old&&$(`#clipPin .clip[data-id="${old.id}"]`);
   const commit=()=>{if(old){const t=old.ord;old.ord=c.ord;c.ord=t;}DB.learningId=c.id;save();renderClips();};
   if(!elA||!elB||!elA.animate){commit();return;}
   const ra=elA.getBoundingClientRect(),rb=elB.getBoundingClientRect(),dist=Math.abs(ra.top-rb.top);
@@ -244,7 +234,7 @@ function bindClip(el){const c=clipById(el.dataset.id),face=el.querySelector('.fa
     long:e=>{el.classList.remove('pressed');if(OPEN||SWAPPING)return;SFX.click();
       if(!c.sents){dialog(`스크립트를 먼저 불러와 주세요<small>${esc(c.title||'')}</small>`,[{label:'확인',pri:true}]);return;}
       if(c.id===DB.learningId){dialog(`이미 학습 중인 영상이에요<small>${esc(c.title||'')}</small>`,[{label:'확인',pri:true}]);return;}
-      dialog(`이 영상으로 학습할까요?<small>${esc(c.title||'')}</small>`,[{label:'아니요'},{label:'네',pri:true,fn:()=>swapLearning(c)}]);},
+      dialog(`이 영상으로 학습할까요?<small>${esc(c.title||'')}</small>`,[{label:'아니요'},{label:'네',pri:true,silent:true,fn:()=>swapLearning(c)}]);},
     move:dx=>{el.classList.remove('pressed');const base=OPEN===me?(me.dir===1?OPN:-OPN):0;const x=base+dx;
       face.style.transition='';face.style.transform=`translateX(${x}px)`;del.style.opacity=x<0?1:0;load.style.opacity=x>0?1:0;del.style.pointerEvents=load.style.pointerEvents='none';},
     swipe:dx=>{me.at=Date.now();const base=OPEN===me?(me.dir===1?OPN:-OPN):0;const x=base+dx;face.style.transition='transform .2s';
