@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.5.0 */
+/* Goshé. — 고성능 쉐도잉 v1.5.1 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -26,9 +26,9 @@ function audio(){try{if(!AC||AC.state==='closed'){ambient();AC=new(window.AudioC
   if(AC.state!=='running'&&!document.hidden){const p=AC.resume();if(p&&p.catch)p.catch(()=>{});}}catch(e){}return AC;}
 function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const k in BUF)delete BUF[k];audio();}
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
-const SMP={press:'sfx/press.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
+const SMP={peek:'sfx/peek.wav',press:'sfx/press.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.5.0').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.5.1').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -50,7 +50,8 @@ const SFX={
   perfect(){sample('perfect',.208);},                                                                              // 한 번 듣고 맞힘 = 트럼펫 따-다~
   ng(){sample('wrong',.208);},                                                                                     // 실패 = 정답 소리를 낮춰 거꾸로
   swap(){sample('swap',.226);},                                                                                    // 학습 클립 교체 = 책장 넘김(거꾸로)
-  logo(){sample('logo',.244);},                                                                                    // 로고 기믹 = 낮은 뿅
+  logo(){sample('logo',.897);},                                                                                    // 로고 기믹 = 낮은 뿅 (폰 스피커 기준으로 '톡'과 같은 크기)
+  peek(){sample('peek',.79);},                                                                                     // 단어 하나 열기 = 낮은 틱
 };
 document.addEventListener('pointerdown',()=>audio(),{capture:true,passive:true});
 document.addEventListener('visibilitychange',()=>{if(document.hidden){try{AC&&AC.suspend();}catch(e){}}});
@@ -339,7 +340,7 @@ function matchWords(words,said){const tt=[],owner=[];words.forEach((w,i)=>canon(
   const got=new Set();words.forEach((w,wi)=>{const ks=need.get(wi);if(!ks||ks.every(k=>hit.has(k)))got.add(wi);});return got;}
 
 /* ---------- ② 쉐도잉 ---------- */
-const SH={idx:0,listens:0,revealed:new Set(),done:false,phase:'idle',words:[]};   // phase: idle | rec | wait | done
+const SH={idx:0,listens:0,revealed:new Set(),done:false,phase:'idle',words:[],peeked:false};   // phase: idle | rec | wait | done
 const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   stop:'<svg width="28" height="28" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="#fff"/></svg>',
   arrow:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
@@ -353,7 +354,7 @@ function renderShadow(play){const c=learning();const msg=$('#shMsg');
   if(!c||!c.sents||!c.sents.length){show(false);msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';return;}
   show(true);msg.innerHTML='';SH.idx=Math.min(c.lastIdx||0,c.sents.length-1);enterSentence(false);}
 function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.idx];
-  killRec();SH.listens=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.words=s.en.split(/\s+/).filter(Boolean);
+  killRec();SH.listens=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.peeked=false;SH.words=s.en.split(/\s+/).filter(Boolean);
   closeWord(true);
   SH.words.forEach((w,i)=>{if(!canon(w).length||isName(c,w))SH.revealed.add(i);});
   const sent=$('#shSent');sent.className='sent'+(s.en.length>140?' s3':s.en.length>90?' s2':'');
@@ -460,9 +461,13 @@ async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done'
   const one=ok&&SH.listens<=1;setTimeout(()=>{ok?(one?SFX.perfect():SFX.ok()):SFX.ng();setMic('arrow');},175);
   const c=learning();if(c){c.res=c.res||{};c.res[SH.idx]=ok?1:0;save();}}
 $('#micBtn').onclick=()=>{if(SH.phase==='idle')startRec();else if(SH.phase==='rec'){SFX.tok();stopRec();}else if(SH.phase==='done'){SFX.tok();gotoSentence(1);}};
-/* 문장 영역: 탭 = 다시 듣기, 좌우 밀기 = 이전/다음, 단어 꾹 = 뜻 */
+/* 문장 영역: 좌우 밀기 = 이전/다음, 단어 꾹 = 뜻, 가려진 단어 탭 = 한 문장에 한 단어만 열기 (감탄사·대명사처럼 인식이 안 돼 막힐 때) */
+function peekWord(w){if(!w||w.classList.contains('r')||SH.done||SH.peeked||SH.phase!=='idle')return;const i=+w.dataset.i;if(SH.revealed.has(i))return;
+  SH.peeked=true;SFX.peek();SH.revealed.add(i);revealWords([i]);
+  if(SH.revealed.size>=SH.words.length){SH.phase='wait';setMic('wait');setTimeout(()=>finishSentence(SH.listens<=3),300);}}   /* 연 단어는 맞힌 것으로 침 — 퍼펙트도 그대로 */
 (()=>{const sh=$('#shad');let lw=null;
   gesture(sh,{
+    tap:e=>peekWord(e.target.closest('#shSent .w')),
     long:e=>{const w=e.target.closest('#shSent .w');if(!w||!w.classList.contains('r')||SH.phase==='rec'||SH.phase==='wait')return;lw=w;openWord(+w.dataset.i);},
     swipe:dx=>{if(Math.abs(dx)>60)gotoSentence(dx<0?1:-1);},move:()=>{}});})();
 /* 단어 뜻 팝업 */
