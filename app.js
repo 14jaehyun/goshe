@@ -616,7 +616,9 @@ DB.clips.forEach(c=>{if(c.busy)c.busy='';});
 drawSpeeds();setFold(!!DB.ui.folded);setTab(DB.ui.tab||'pClip',false);
 if(window.YT&&YT.Player)ytInit();else{const iv=setInterval(()=>{if(window.YT&&YT.Player){clearInterval(iv);ytInit();}},300);setTimeout(()=>clearInterval(iv),20000);}
 if(learning())setTimeout(cueLearning,600);
-if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+if('serviceWorker' in navigator){const had=!!navigator.serviceWorker.controller;let rl=false;
+  navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(r=>{r.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(!document.hidden)r.update().catch(()=>{});});}).catch(()=>{});
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(had&&!rl){rl=true;location.reload();}});}   // 새 버전이 오면 한 번 새로고침해서 바로 적용
 ambient();
 
 /* ---------- 단어장 내보내기·가져오기 (CSV: 제목 줄 없이 한국어, 영어 / 단어장 순서 그대로) ---------- */
