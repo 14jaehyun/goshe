@@ -103,13 +103,10 @@ body.folded #fold i{border-bottom:none;border-top:6px solid #8a97a6}
 .w.r .u{opacity:0}
 .w.hl{background:var(--mint-bg);box-shadow:-4px 0 0 var(--mint-bg),4px 0 0 var(--mint-bg)}
 .w.hl+.w.hl{box-shadow:-.3em 0 0 var(--mint-bg),4px 0 0 var(--mint-bg)}
-.spd{display:flex;justify-content:flex-end;margin-top:16px}
 .speed{position:relative;display:grid;grid-template-columns:38px 54px 38px;padding:0 3px;height:36px;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:max-content}
 .speed button{height:100%;display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--sub);padding:0;-webkit-appearance:none;appearance:none;border-radius:0}
 .speed button svg{display:block}
 .speed .v{border:none;overflow:visible;font-size:14px;font-weight:600;color:#a7b3c0;line-height:1;font-variant-numeric:tabular-nums}
-.stampzone{position:absolute;left:0;right:0;height:100px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:1}
-.stamp{font-size:27px;font-weight:900;letter-spacing:.04em;color:#8fd4b1;border:3.5px solid #8fd4b1;border-radius:12px;padding:2px 16px;transform:rotate(-30deg);opacity:0;text-transform:uppercase;white-space:nowrap}
 .micwrap{position:absolute;left:0;right:0;bottom:24px;display:flex;justify-content:center;align-items:center}
 body.folded .micwrap{bottom:var(--micUp,140px)}
 .mic{width:92px;height:92px;border-radius:50%;background:var(--navy);display:flex;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(79,109,138,.3)}
@@ -210,3 +207,11 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 #shCount{cursor:pointer;padding:6px 0 6px 12px;margin-top:-6px;margin-bottom:-6px}
 #shCount .goin{width:2.6em;border:none;outline:none;background:transparent;font:inherit;font-size:11px;color:var(--ink);caret-color:var(--mint);text-align:right;padding:0;margin:0}
 #shCount .goin::placeholder{color:var(--faint)}
+/* 쉐도잉 윗줄 = 스크립트 탭과 같은 자리: 왼쪽 속도계, 오른쪽 n / nn */
+#pShadow .top{height:36px;margin:2px 0 0}
+#pShadow .top em{position:absolute;top:2px;right:0;margin:0;height:16px;line-height:16px}
+/* 듣기 횟수 점: 말하기 버튼 바로 위 */
+.lights{position:absolute;left:0;right:0;bottom:calc(100% + 14px);display:flex;justify-content:center;gap:7px;pointer-events:none}
+.lights.ok .dot{background:#B9E2CD;border-color:#B9E2CD}
+.lights.ng .dot{background:#F7CCD7;border-color:#F7CCD7}
+.lights.ok .dot i,.lights.ng .dot i{opacity:0}

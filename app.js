@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.3.6 */
+/* Goshé. — 고성능 쉐도잉 v1.4.0 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -151,11 +151,9 @@ $('#fold').onclick=()=>{SFX.tok();setFold(!DB.ui.folded);};
 (()=>{const L=$('#logo');const on=()=>L.classList.add('on'),off=()=>L.classList.remove('on');
   L.addEventListener('pointerdown',on);['pointerup','pointercancel','pointerleave'].forEach(e=>L.addEventListener(e,off));})();
 function layout(){
-  // 쉐도잉: 도장은 속도계와 녹음 버튼 사이 가운데, 접으면 버튼도 비율 맞춰 위로
+  // 쉐도잉: 접으면 버튼(과 그 위 듣기 횟수 점)도 비율 맞춰 위로
   const vh=Math.min(window.innerWidth*0.5625,292);
   document.documentElement.style.setProperty('--micUp',Math.round(24+vh*0.45)+'px');
-  const page=$('#pShadow');if(page.classList.contains('on')){const spd=$('#pShadow .spd'),mw=$('.micwrap');
-    const a=spd.offsetTop+spd.offsetHeight,b=page.clientHeight-parseFloat(getComputedStyle(mw).bottom)-92;$('.stampzone').style.top=Math.round((a+b)/2-50)+'px';}
   if($('#pClip').classList.contains('on'))fillEmptyRows();
   if($('#pScript').classList.contains('on'))drumPads();
   if($('#pVocab').classList.contains('on'))movePill();}
@@ -361,7 +359,7 @@ const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" str
   speaker:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.5a7.5 7.5 0 0 1 0 11"/></svg>'};
 function setMic(k){const b=$('#micBtn');b.innerHTML=ICON[k];b.disabled=(k==='wait');}
 function renderShadow(play){const c=learning();const msg=$('#shMsg');
-  const show=on=>{['.top','.trz','#shSent','#pShadow .spd','.micwrap'].forEach(s=>$(s).style.visibility=on?'':'hidden');};
+  const show=on=>{['.top','.trz','#shSent','.micwrap'].forEach(s=>$(s).style.visibility=on?'':'hidden');};
   if(!c||!c.sents||!c.sents.length){show(false);msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';return;}
   show(true);msg.innerHTML='';SH.idx=Math.min(c.lastIdx||0,c.sents.length-1);enterSentence(false);}
 function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.idx];
@@ -372,7 +370,7 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   sent.innerHTML=SH.words.map((w,i)=>`<span class="w${SH.revealed.has(i)?' r':''}" data-i="${i}"><span class="t">${esc(w)}</span><span class="u"></span></span>`).join('');
   $('#shKo').textContent=s.ko||'';$('#shKo').classList.remove('on');
   $$('.dot').forEach(d=>d.classList.remove('f'));
-  const st=$('#stamp');st.getAnimations().forEach(a=>a.cancel());st.style.opacity=0;st.style.display='none';
+  const L=$('#lights');L.classList.remove('ok','ng');$$('#lights .dot').forEach(d=>d.getAnimations().forEach(a=>a.cancel()));
   $('#shCount').textContent=`${SH.idx+1} / ${c.sents.length}`;setMic('mic');drawListen();
   c.lastIdx=SH.idx;save();requestAnimationFrame(layout);
   }
@@ -465,9 +463,10 @@ async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done'
   await sleep(rest.length*50+300);
   if($('#shKo').textContent)$('#shKo').classList.add('on');
   await sleep(350);
-  const st=$('#stamp');st.style.display='';st.textContent=ok?'Complete':'Incomplete';
-  st.animate([{opacity:0,transform:'rotate(-30deg) scale(2.4)'},{opacity:.48,transform:'rotate(-30deg) scale(.92)',offset:.62},{opacity:.45,transform:'rotate(-30deg) scale(1.04)',offset:.82},{opacity:.44,transform:'rotate(-30deg) scale(1)'}],
-    {duration:280,easing:'cubic-bezier(.55,0,.9,.45)',fill:'forwards'});
+  /* 결과: 듣기 횟수 점 3개가 신호등처럼 반짝(맞으면 연초록, 틀리면 연분홍 — 빨강은 눈에 띄어 빛을 더 약하게), 반짝인 뒤 색은 다음 문장까지 유지 */
+  const L=$('#lights');L.classList.add(ok?'ok':'ng');const g=ok?'143,220,181':'240,150,175',m=ok?1:.5;
+  const sh=o=>`0 0 ${4+6*o}px ${1+2*o}px rgba(${g},${(.665*m*o).toFixed(3)}), 0 0 ${10+18*o}px ${3+6*o}px rgba(${g},${(.35*m*o).toFixed(3)})`;
+  $$('#lights .dot').forEach(d=>d.animate([{boxShadow:sh(0)},{boxShadow:sh(1),offset:.2,easing:'ease-out'},{boxShadow:sh(0)}],{duration:600}));
   const one=ok&&SH.listens<=1;setTimeout(()=>{ok?(one?SFX.perfect():SFX.ok()):SFX.ng();setMic('arrow');},175);
   const c=learning();if(c){c.res=c.res||{};c.res[SH.idx]=ok?1:0;save();}}
 $('#micBtn').onclick=()=>{if(SH.phase==='idle')startRec();else if(SH.phase==='rec'){SFX.tok();stopRec();}else if(SH.phase==='done'){SFX.tok();gotoSentence(1);}};
