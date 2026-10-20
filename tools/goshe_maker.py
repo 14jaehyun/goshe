@@ -1,4 +1,4 @@
-# Goshé. 스크립트 만들기 — 유튜브 링크 → Whisper 단어 시간 → 문장 단위 .goshe.json (iCloud Drive\Goshe)
+# Goshé. 스크립트 만들기 — 유튜브 링크 → Whisper 단어 시간 → 문장 단위 .goshe.json (회사 원드라이브\Goshe)
 import os, re, sys, json, glob, tempfile, shutil, warnings
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 os.environ.setdefault("HF_HUB_DISABLE_IMPLICIT_TOKEN", "1")
@@ -18,12 +18,16 @@ def _patch_av():
 MODEL = os.environ.get("GOSHE_MODEL", "medium.en")   # 느리면 small.en
 
 def out_dir():
+    """회사 원드라이브(OneDrive - 회사이름)\\Goshe 에 저장. 없으면 iCloud Drive, 그것도 없으면 바탕화면"""
     home = os.path.expanduser("~")
-    for base in (os.path.join(home, "iCloudDrive"), os.path.join(home, "iCloud Drive")):
-        if os.path.isdir(base):
+    bases = [os.environ.get("OneDriveCommercial")]
+    bases += sorted(glob.glob(os.path.join(home, "OneDrive - *")))      # 환경변수가 없을 때 폴더 이름으로 찾기
+    bases += [os.path.join(home, "iCloudDrive"), os.path.join(home, "iCloud Drive")]
+    for base in bases:
+        if base and os.path.isdir(base):
             d = os.path.join(base, "Goshe"); os.makedirs(d, exist_ok=True); return d
     d = os.path.join(home, "Desktop", "Goshe"); os.makedirs(d, exist_ok=True)
-    print("! iCloud Drive 폴더를 못 찾아서 바탕화면\\Goshe 에 저장해요"); return d
+    print("! 원드라이브·iCloud Drive 폴더를 못 찾아서 바탕화면\\Goshe 에 저장해요"); return d
 
 def vid_of(u):
     m = re.search(r"(?:v=|youtu\.be/|shorts/|embed/|live/)([A-Za-z0-9_-]{11})", u)
