@@ -227,6 +227,5 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 
 /* 스크립트 직접 수정: 꾹 누른 문장 ±2줄이 그 자리에서 편집 상태로 (드럼 멈춤, 남색 빛 없음) */
 #drum.editing{overflow:hidden;scroll-snap-type:none}
-#sced{outline:none;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default;font-size:13.5px;line-height:1.3;color:var(--ink);caret-color:var(--navy);
-  background:var(--soft2);box-shadow:0 0 0 6px var(--soft2);border-radius:2px;margin:6px 0;text-align:left;word-break:break-word}
-#sced>div{padding:3px 0;min-height:1.3em}
+#sced{outline:none;-webkit-user-select:text;user-select:text;-webkit-touch-callout:default;font-size:13.5px;line-height:1.3;color:var(--ink);caret-color:var(--navy);text-align:left}
+#sced>div{padding:3px 0;min-height:1.3em;transform-origin:left center}   /* 드럼 줄(#drum p)과 같은 모양 */

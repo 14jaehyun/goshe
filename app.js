@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.7.0 */
+/* Goshé. — 고성능 쉐도잉 v1.7.1 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.7.0').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.7.1').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -553,6 +553,13 @@ function centerIndex(){const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2
 const OPS=[1,.72,.6,.5,.42,.36,.3,.26,.22];
 function scCount(i){const c=learning();if(i==null)i=DR.idx;$('#scCount').textContent=c&&c.sents&&c.sents.length?`${Math.min(i,c.sents.length-1)+1} / ${c.sents.length}`:'';
   $$('#drum p.cur').forEach(p=>{if(+p.dataset.i!==i)p.classList.remove('cur');});const cp=$(`#drum p[data-i="${i}"]`);cp&&cp.classList.add('cur');drawBm();}   // 돌리는 중에는 가운데 문장 번호
+/* 편집 중에도 드럼 모양(가운데에서 멀수록 흐리고 납작) 그대로 — 남색 빛만 없음. 편집 줄은 #sced 안의 줄 */
+function shadeLine(p,mid){const c=p.offsetTop+p.offsetHeight/2;const dist=Math.abs(c-mid)/24;const k=Math.min(OPS.length-1,dist);const lo=Math.floor(k),fr=k-lo;
+  p.style.opacity=(OPS[lo]+(OPS[Math.min(OPS.length-1,lo+1)]-OPS[lo])*fr).toFixed(3);p.style.transform=`scaleY(${Math.max(.62,1-dist*.04).toFixed(3)})`;p.style.textShadow='';}
+function shadeEdit(){if(!EDIT)return;const d=$('#drum');const ed=EDIT.ed;const rows=[...ed.children];const pr=rows[Math.min(EDIT.press,rows.length-1)]||ed;
+  const mid=pr.offsetTop+pr.offsetHeight/2;   /* 꾹 누른 줄을 가운데로 */
+  rows.forEach(r=>shadeLine(r,mid));const ps=$$('#drum p');const k=ps.findIndex(p=>p.compareDocumentPosition(ed)&Node.DOCUMENT_POSITION_PRECEDING);
+  const at=k<0?ps.length:k;for(let i=Math.max(0,at-25);i<Math.min(ps.length,at+25);i++)shadeLine(ps[i],mid);}
 function shadeDrum(){if(EDIT)return;const d=$('#drum');const mid=d.scrollTop+d.clientHeight/2;const ci=centerIndex();scCount(ci);const ps=$$('#drum p');
   for(let i=Math.max(0,ci-25);i<Math.min(ps.length,ci+26);i++){const p=ps[i];const c=p.offsetTop+p.offsetHeight/2;const dist=Math.abs(c-mid)/24;
     const k=Math.min(OPS.length-1,dist);const lo=Math.floor(k),fr=k-lo;const op=OPS[lo]+(OPS[Math.min(OPS.length-1,lo+1)]-OPS[lo])*fr;
@@ -595,10 +602,11 @@ function startEdit(i,x,y){const c=learning();if(!c||!c.sents||!c.sents[i]||EDIT)
   Object.assign(ed,{spellcheck:false});ed.setAttribute('autocorrect','off');ed.setAttribute('autocapitalize','off');ed.setAttribute('enterkeyhint','enter');
   ed.innerHTML=c.sents.slice(a,b+1).map(s=>`<div>${esc(s.en)}</div>`).join('');
   ps[0].before(ed);ps.forEach(p=>p.remove());
-  d.scrollTop=ed.offsetTop+ed.offsetHeight/2-d.clientHeight/2;
   ed.addEventListener('paste',ev=>{ev.preventDefault();const t=(ev.clipboardData&&ev.clipboardData.getData('text/plain'))||'';document.execCommand('insertText',false,t);});
   ed.addEventListener('blur',()=>setTimeout(()=>{if(EDIT&&document.activeElement!==ed&&!EDIT.needFocus)finishEdit();},0));
   EDIT={c,a,b,press:i-a,ed,needFocus:true,shift:0,orig:c.sents.slice(a,b+1).map(s=>s.en).join('\n')};
+  {const pr=ed.children[i-a];d.scrollTop=pr.offsetTop+pr.offsetHeight/2-d.clientHeight/2;}shadeEdit();
+  ed.addEventListener('input',()=>{const rows=ed.children.length;if(EDIT)EDIT.press=Math.min(EDIT.press,Math.max(0,rows-1));shadeEdit();});
   const vv=window.visualViewport;if(vv){vv.addEventListener('resize',fitEdit);vv.addEventListener('scroll',fitEdit);}}
 function focusEditor(x,y){if(!EDIT)return;const ed=EDIT.ed;try{ed.focus({preventScroll:true});}catch(e){ed.focus();}
   let r=null;try{if(document.caretRangeFromPoint)r=document.caretRangeFromPoint(x,y);}catch(e){}
