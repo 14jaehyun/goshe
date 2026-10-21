@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.7.1 */
+/* Goshé. — 고성능 쉐도잉 v1.8.0 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.7.1').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.8.0').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -180,12 +180,16 @@ function vidOf(u){u=String(u||'').trim();let m=u.match(/(?:youtube\.com\/(?:watc
 async function fetchTitle(vid){const w='https://www.youtube.com/watch?v='+vid;
   for(const u of ['https://www.youtube.com/oembed?format=json&url='+encodeURIComponent(w),'https://noembed.com/embed?url='+encodeURIComponent(w)]){
     try{const r=await fetch(u);if(r.ok){const j=await r.json();if(j.title)return j.title;}}catch(e){}}return '';}
-async function addLink(){const inp=$('#linkIn');const vid=vidOf(inp.value);
+function newClip(vid,title){const c={id:'c'+Date.now().toString(36),vid,title:title||'',added:Date.now(),ord:Date.now(),sents:null,lastIdx:0,scIdx:0};DB.clips.push(c);
+  if(!DB.learningId)DB.learningId=c.id;save();renderClips();return c;}
+/* 링크 칸이 비어 있으면 + = 스크립트 파일 바로 불러오기 (그 영상 클립이 없으면 파일 안의 영상 ID로 클립도 만듦) */
+async function addLink(){const inp=$('#linkIn');
+  if(!inp.value.trim()){inp.blur();pickScript(null);return;}
+  const vid=vidOf(inp.value);
   if(!vid){toast('유튜브 링크를 확인해 주세요');return;}
   inp.value='';inp.blur();
   if(DB.clips.some(c=>c.vid===vid)){toast('이미 있는 클립이에요');return;}
-  const c={id:'c'+Date.now().toString(36),vid,title:'',added:Date.now(),ord:Date.now(),sents:null,lastIdx:0,scIdx:0};DB.clips.push(c);
-  if(!DB.learningId)DB.learningId=c.id;save();renderClips();
+  const c=newClip(vid);
   const t=await fetchTitle(vid);if(t){c.title=t;save();renderClips();}}
 $('#addBtn').onclick=()=>{SFX.tok();addLink();};
 $('#linkIn').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addLink();}});
@@ -251,11 +255,14 @@ function removeClip(c){DB.clips=DB.clips.filter(x=>x!==c);if(DB.learningId===c.i
 
 /* 스크립트 파일 불러오기 */
 let pickFor=null;
-function pickScript(c){pickFor=c;const f=$('#fileIn');f.value='';f.click();}
-$('#fileIn').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];const c=pickFor;pickFor=null;if(!file||!c)return;
+function pickScript(c){pickFor=c||'new';const f=$('#fileIn');f.value='';f.click();}
+$('#fileIn').addEventListener('change',async e=>{const file=e.target.files&&e.target.files[0];let c=pickFor;pickFor=null;if(!file||!c)return;
   let j=null;try{j=JSON.parse(await file.text());}catch(err){}
   const ok=j&&j.goshe&&Array.isArray(j.sents)&&j.sents.length&&j.sents.every(x=>isFinite(x.start)&&isFinite(x.end)&&x.en);
   if(!ok){toast('PC에서 만든 .goshe.json 파일을 골라 주세요',2800);return;}
+  if(c==='new'){const vid=vidOf(j.vid||'');if(!vid){toast('영상 정보가 없는 파일이에요. 링크로 클립을 먼저 추가해 주세요',3000);return;}
+    c=DB.clips.find(x=>x.vid===vid)||newClip(vid,j.title);
+    if(!c.title||c.title===c.vid)fetchTitle(vid).then(t=>{if(t&&(!c.title||c.title===c.vid)){c.title=t;save();renderClips();}});}
   const load=()=>loadScript(c,j);
   /* 직접 고친 스크립트가 있으면 덮어쓰기 전에 한 번 물어봄 */
   const go=()=>{if(c.edited&&c.sents)dialog(`수정한 스크립트가 있어요<small>새로 불러오면 고친 내용은 사라져요</small>`,[{label:'취소'},{label:'새로 불러오기',pri:true,fn:load}]);else load();};
