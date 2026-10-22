@@ -41,6 +41,14 @@ def download(vid, tmp):
         info = y.extract_info("https://www.youtube.com/watch?v=" + vid, download=True)
     return glob.glob(os.path.join(tmp, "a.*"))[0], info.get("title") or vid
 
+# 화자 이름: 줄 처음(또는 "- " 뒤)에 대문자로 시작하는 1~3단어 + 콜론 — 단 대사로 흔한 "Look:" "Okay:" 같은 한 단어는 대문자로만 된 경우만
+SPEAKER = (r"(?:^|(?<=\n))\s*(?:-\s+)?(?:"
+           r"(?:Mr|Mrs|Ms|Dr)\.?\s+[A-Z][\w'.-]*"                       # Mr. Smith:
+           r"|[A-Z][A-Z'.-]+(?:\s+[A-Z][A-Z'.-]+){0,2}"                    # DAVID: / JIMMY FALLON:
+           r"|[A-Z][a-z'.-]+(?:\s+[A-Z][a-z'.-]+){1,2}"                    # Jimmy Fallon:
+           r"|(?!(?:Look|Okay|OK|Well|Listen|So|Now|Note|Yes|No|Wait|Hey|Oh)\b)[A-Z][a-z'.-]+"   # David:
+           r")\s*:(?!\d)\s*")
+
 def human_subs(vid, tmp):
     """사람이 만든 영어 자막이 있으면 받아서 문장 목록으로 (없으면 None). 시간은 자막 파일의 ms 단위 그대로"""
     import yt_dlp
@@ -65,7 +73,10 @@ def human_subs(vid, tmp):
         if "tStartMs" not in e:
             continue
         raw = "".join(g.get("utf8", "") for g in (e.get("segs") or []))
-        raw = re.sub(r"\[[^\]]*\]|\([^)]*\)|[♪♫]", " ", raw)      # [whispering], (laughs), ♪ 같은 지문은 뺌
+        raw = re.sub(r"\[[^\]]*\]|\([^)]*\)|\*[^*\n]*\*|[♪♫]", " ", raw)   # [whispering], (laughs), *sighs*, ♪ 같은 지문은 뺌
+        raw = re.sub(r"\*+", " ", raw)                                   # 짝이 안 맞아 남은 별표
+        raw = re.sub(r"\s*>>+\s*", "\n- ", raw)                           # ">>" = 화자 바뀜 (방송 자막)
+        raw = re.sub(SPEAKER, "\n- ", raw)                                # "DAVID:" "Mr. Smith:" 같은 화자 이름 = 빼고 화자 바뀜으로
         parts = [re.sub(r"\s+", " ", x).strip() for x in re.split(r"(?:^|\n)\s*-\s+", raw)]   # "- 대사" = 화자 바뀜
         parts = [x for x in parts if re.search(r"[A-Za-z0-9]", x)]
         if not parts:
