@@ -475,7 +475,7 @@ async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done'
   const c=learning();if(c){c.res=c.res||{};c.res[SH.idx]=ok?1:0;save();}}
 $('#micBtn').onclick=()=>{if(SH.phase==='idle')startRec();else if(SH.phase==='rec'){SFX.tok();stopRec();}else if(SH.phase==='done'){SFX.tok();gotoSentence(1);}};
 /* 왼쪽 밀기로 넘길 때 아직 안 끝난 문장이면: 먼저 영문장·해석을 다 보여주고(소리·결과 기록 없음), 한 번 더 밀면 다음 문장 */
-function skipReveal(){const c=learning();if(!c||SH.done||SH.phase==='rec'||SH.phase==='wait'||SH.idx>=c.sents.length-1)return false;
+function skipReveal(){const c=learning();if(!c||SH.done||SH.phase==='rec'||SH.phase==='wait')return false;   /* 마지막 문장도 보여줌 — 한 번 더 밀면 '마지막 문장이에요' */
   SH.done=true;SH.phase='done';closeWord(true);const rest=SH.words.map((_,i)=>i).filter(i=>!SH.revealed.has(i));rest.forEach(i=>SH.revealed.add(i));revealWords(rest);
   drawListen();if($('#shKo').textContent)$('#shKo').classList.add('on');setMic('arrow');return true;}
 /* 문장 영역: 좌우 밀기 = 이전/다음, 단어 꾹 = 뜻, 가려진 단어 탭 = 한 문장에 한 단어만 열기 (감탄사·대명사처럼 인식이 안 돼 막힐 때) */
