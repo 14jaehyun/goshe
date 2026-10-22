@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.8.2 */
+/* Goshé. — 고성능 쉐도잉 v1.8.3 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.8.2').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.8.3').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -89,7 +89,7 @@ let YTP=null,ytReady=false,curVid='',playMon=null,PLAY=null,ytQueue=null;
 function ytInit(){if(YTP||!window.YT||!YT.Player)return;
   YTP=new YT.Player('player',{width:'100%',height:'100%',playerVars:{playsinline:1,controls:0,disablekb:1,rel:0,iv_load_policy:3,fs:0,cc_load_policy:0,modestbranding:1,origin:location.origin},
     events:{onReady:()=>{ytReady=true;$('#noVideo').classList.add('hidden');if(ytQueue){const q=ytQueue;ytQueue=null;q();}},
-      onStateChange:e=>{if(e.data===YT.PlayerState.PLAYING){fillTitle();noCaptions();}},onApiChange:noCaptions}});}
+      onStateChange:e=>{if(e.data===YT.PlayerState.PLAYING){fillTitle();noCaptions();if(!PLAY&&DB.ui.tab==='pScript'&&!EDIT)startFollow();}else if(e.data===YT.PlayerState.PAUSED||e.data===YT.PlayerState.ENDED)stopFollow();},onApiChange:noCaptions}});}
 /* 영상 자막 끄기 — 쉐도잉은 소리만 듣고 맞히는 거라 자막이 보이면 정답이 미리 보임 */
 function noCaptions(){try{YTP.setOption('captions','track',{});}catch(e){}try{YTP.unloadModule('captions');}catch(e){}try{YTP.unloadModule('cc');}catch(e){}}
 window.onYouTubeIframeAPIReady=ytInit;
@@ -124,7 +124,7 @@ function standbyFor(tab){const c=learning();
 function cueLearning(){standbyFor(DB.ui.tab);}
 
 /* ---------- 탭·접기·로고 ---------- */
-function setTab(t,sound){if(sound&&DB.ui.tab!==t)SFX.ding();
+function setTab(t,sound){if(sound&&DB.ui.tab!==t)SFX.ding();if(t!=='pScript')stopFollow();
   if(DB.ui.tab==='pClip'&&t!=='pClip'&&curVid&&YTP){try{CLIPPOS={vid:curVid,t:YTP.getCurrentTime()||0};}catch(e){}}
   const changed=DB.ui.tab!==t;DB.ui.tab=t;save();
   $$('.page').forEach(p=>p.classList.toggle('on',p.id===t));$$('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
@@ -139,7 +139,7 @@ let TABLONG=0;
 $$('.tab').forEach(b=>b.onclick=()=>{if(Date.now()-TABLONG<700)return;setTab(b.dataset.t,true);});
 /* 스크립트 탭에서 스크립트 버튼 꾹 → 쉐도잉으로 그 문장, 쉐도잉 탭에서 쉐도잉 버튼 꾹 → 스크립트로 그 문장 */
 $$('.tab').forEach(b=>gesture(b,{long:()=>{const t=b.dataset.t,c=learning();if(t!==DB.ui.tab||!c||!c.sents||!c.sents.length)return;
-  if(t==='pScript'){TABLONG=Date.now();SFX.peek();c.lastIdx=centerIndex();save();setTab('pShadow',false);}
+  if(t==='pScript'){TABLONG=Date.now();SFX.peek();const ci=centerIndex();if(isSkip(c.sents[ci]))return;c.lastIdx=ci;save();setTab('pShadow',false);}   /* ~ 문장이면 소리만 */
   else if(t==='pShadow'){if(SH.phase==='rec'||SH.phase==='wait')return;TABLONG=Date.now();SFX.peek();c.scIdx=SH.idx;save();setTab('pScript',false);}}}));
 function setFold(f){document.body.classList.toggle('folded',f);DB.ui.folded=f;save();setTimeout(layout,270);}
 $('#fold').onclick=()=>{SFX.tok();setFold(!DB.ui.folded);};
@@ -319,6 +319,13 @@ ${list.map(i=>`${i}: ${sents[i].en}`).join('\n')}`;
   if(fatal&&failed===sents.length){done();toast(errMsg(fatal),3000);return;}
   done();ensureNames(c);toast(failed?`${sents.length}문장 불러왔어요 (${failed}문장은 해석 없이)`:`${sents.length}문장 불러왔어요`,2600);}
 
+/* ---------- 스크립트 마크: 문장 앞 ~ = 쉐도잉에서 통째로 건너뜀(스크립트에서도 재생 안 함), 단어 앞 @ = 처음부터 보이고 판정에서 뺌 ---------- */
+const isSkip=s=>!!s&&/^\s*~/.test(s.en);
+const plainEn=en=>String(en).replace(/^\s*~\s*/,'').replace(/(^|\s)@(?=\S)/g,'$1');
+const markHTML=en=>esc(en).replace(/^(\s*)~\s*/,'$1<span class="mk">~</span>').replace(/(^|\s)@(?=\S)/g,'$1<span class="mk">@</span>');
+/* i부터 가까운 쉐도잉 문장(~ 아닌 문장): 앞으로 먼저, 없으면 뒤로 */
+function shIdx(c,i){const L=c.sents;i=Math.max(0,Math.min(L.length-1,i));for(let k=i;k<L.length;k++)if(!isSkip(L[k]))return k;for(let k=i-1;k>=0;k--)if(!isSkip(L[k]))return k;return -1;}
+
 /* ---------- 판정: 축약형 같게 보기 ---------- */
 const CONTR={"can't":['can','not'],"cannot":['can','not'],"won't":['will','not'],"shan't":['shall','not'],"ain't":['is','not'],"let's":['let','us'],
   "gonna":['going','to'],"wanna":['want','to'],"gotta":['got','to'],"kinda":['kind','of'],"sorta":['sort','of'],"lemme":['let','me'],"gimme":['give','me'],
@@ -365,12 +372,13 @@ function setMic(k){const b=$('#micBtn');b.innerHTML=ICON[k];b.disabled=(k==='wai
 function renderShadow(play){const c=learning();const msg=$('#shMsg');
   const show=on=>{['.top','.trz','#shSent','.micwrap'].forEach(s=>$(s).style.visibility=on?'':'hidden');};
   if(!c||!c.sents||!c.sents.length){show(false);msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';return;}
-  show(true);msg.innerHTML='';SH.idx=Math.min(c.lastIdx||0,c.sents.length-1);enterSentence(false);}
+  const k=shIdx(c,c.lastIdx||0);if(k<0){show(false);msg.innerHTML='모든 문장이 ~ 표시라 쉐도잉할 문장이 없어요';return;}
+  show(true);msg.innerHTML='';SH.idx=k;enterSentence(false);}
 function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.idx];
-  killRec();SH.listens=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.peeked=false;SH.words=s.en.split(/\s+/).filter(Boolean);
+  killRec();SH.listens=0;SH.revealed=new Set();SH.done=false;SH.phase='idle';SH.peeked=false;const toks=s.en.replace(/^\s*~\s*/,'').split(/\s+/).filter(t=>t&&t!=='@');SH.words=toks.map(t=>t.replace(/^@(?=\S)/,''));
   closeWord(true);
-  SH.words.forEach((w,i)=>{if(!canon(w).length||isName(c,w))SH.revealed.add(i);});
-  const sent=$('#shSent');sent.className='sent'+(s.en.length>140?' s3':s.en.length>90?' s2':'');
+  SH.words.forEach((w,i)=>{if(!canon(w).length||isName(c,w)||/^@\S/.test(toks[i]))SH.revealed.add(i);});   /* @ 단어 = 처음부터 보이고 판정에서 빠짐 */
+  const sent=$('#shSent');const pl=plainEn(s.en);sent.className='sent'+(pl.length>140?' s3':pl.length>90?' s2':'');
   sent.innerHTML=SH.words.map((w,i)=>`<span class="w${SH.revealed.has(i)?' r':''}" data-i="${i}"><span class="t">${esc(w)}</span><span class="u"></span></span>`).join('');
   $('#shKo').textContent=s.ko||'';$('#shKo').classList.remove('on');
   $$('.dot').forEach(d=>d.classList.remove('f'));
@@ -406,7 +414,7 @@ function listen(auto){if(SH.phase==='rec'||SH.phase==='wait')return;
   if(!SH.done&&SH.listens>=4){if(auto)return;SFX.tok();finishSentence(false);return;}
   if(!auto)SFX.tok();if(!SH.done)SH.listens++;drawListen();playSentence();}
 $('#listenBtn').onclick=()=>listen(false);
-function gotoSentence(d){const c=learning();if(!c||SH.phase==='rec'||SH.phase==='wait')return;const n=SH.idx+d;
+function gotoSentence(d){const c=learning();if(!c||SH.phase==='rec'||SH.phase==='wait')return;let n=SH.idx+d;while(n>=0&&n<c.sents.length&&isSkip(c.sents[n]))n+=d;   /* ~ 문장은 건너뜀 */
   if(n<0){toast('첫 문장이에요');return;}if(n>=c.sents.length){toast('마지막 문장이에요');return;}SH.idx=n;enterSentence(false);}
 /* 녹음 */
 const canRecord=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder);
@@ -502,12 +510,12 @@ function toggleSave(){const c=learning();if(!c||!c.sents||!c.sents.length)return
   const k=c.saved.indexOf(i);if(k>=0)c.saved.splice(k,1);else{c.saved.push(i);c.saved.sort((a,b)=>a-b);}save();SFX.tok();
   const p=$(`#drum p[data-i="${i}"]`);if(p){const sv=p.querySelector('.sv');if(k>=0)sv&&sv.remove();else if(!sv)p.insertAdjacentHTML('afterbegin',SVI);}drawBm();}
 function openSaved(){const c=learning();if(!c||!c.sents)return;SFX.tok();const list=(c.saved||[]).filter(i=>c.sents[i]);
-  $('#savedList').innerHTML=list.length?list.map(i=>`<p data-i="${i}"><b>${i+1}</b><span>${esc(c.sents[i].en)}</span></p>`).join(''):'<p class="none">저장한 문장이 없어요</p>';
+  $('#savedList').innerHTML=list.length?list.map(i=>`<p data-i="${i}"><b>${i+1}</b><span>${esc(plainEn(c.sents[i].en))}</span></p>`).join(''):'<p class="none">저장한 문장이 없어요</p>';
   const sh=$('#sheet');delete sh.dataset.closing;sh.classList.remove('hidden');
   $('#usage').innerHTML=usageHTML();$('#setBox').hidden=false;$('#savedBox').hidden=true;const H=$('#setBox').offsetHeight;   /* 설정창과 같은 높이로 올라오게 */
   $('#setBox').hidden=true;$('#savedBox').hidden=false;$('#savedBox').style.minHeight=H+'px';$('.sheetin').scrollTop=0;sheetAnim('translateY(100%)',0,1000,'cubic-bezier(.22,.8,.24,1)');}
 $('#savedList').addEventListener('click',e=>{const p=e.target.closest('p[data-i]');if(!p)return;const i=+p.dataset.i;SFX.tok();closeSettings();   /* 목록에서 고르면 그 문장으로 */
-  if(DB.ui.tab==='pScript')drumGo(i);else if(SH.phase!=='rec'&&SH.phase!=='wait'){SH.idx=i;enterSentence(false);}});
+  if(DB.ui.tab==='pScript')drumGo(i);else if(SH.phase!=='rec'&&SH.phase!=='wait'){const k=shIdx(c,i);if(k>=0){SH.idx=k;enterSentence(false);}}});
 ['#shBm','#scBm'].forEach(s=>{const b=$(s);b.addEventListener('pointerdown',e=>e.stopPropagation());gesture(b,{tap:()=>toggleSave(),long:()=>openSaved()});});
 /* 단어 뜻 팝업 */
 let WP=null;
@@ -518,7 +526,7 @@ async function openWord(i){const c=learning();if(!c)return;SFX.peek();pausePlaye
   const pop=$('#wpop');pop.classList.remove('hidden');
   pop.innerHTML=`<div class="tx"><div class="ph">${esc(word)}</div><div class="mn ld">뜻 찾는 중…</div></div><button class="b c">닫기</button><button class="b s" disabled>저장</button>`;
   pop.querySelector('.c').onclick=()=>{SFX.tok();closeWord();};
-  try{const sent=c.sents[SH.idx].en;const numbered=SH.words.map((w,k)=>`${k}:${w}`).join(' ');
+  try{const sent=plainEn(c.sents[SH.idx].en);const numbered=SH.words.map((w,k)=>`${k}:${w}`).join(' ');
     const t=await gemini([{text:`English sentence (words numbered from 0): ${numbered}
 Full sentence: "${sent}"
 The learner long-pressed word #${i} ("${SH.words[i]}").
@@ -546,7 +554,7 @@ $$('.speed').forEach(s=>{const k=s.dataset.k;
   s.querySelector('.m').onclick=e=>{e.stopPropagation();SFX.tok();DB.speed[k]=Math.max(25,DB.speed[k]-15);save();drawSpeeds();liveRate(k);};
   s.querySelector('.p').onclick=e=>{e.stopPropagation();SFX.tok();DB.speed[k]=Math.min(200,DB.speed[k]+15);save();drawSpeeds();liveRate(k);};
   s.querySelector('.v').onclick=e=>{e.stopPropagation();SFX.tok();DB.speed[k]=100;save();drawSpeeds();liveRate(k);};});
-function liveRate(k){if(PLAY&&YTP&&((k==='shadow'&&DB.ui.tab==='pShadow')||(k==='script'&&DB.ui.tab==='pScript'))){try{YTP.setPlaybackRate(nearRate(DB.speed[k]/100));}catch(e){}}}
+function liveRate(k){if((PLAY||(FOLLOW&&k==='script'))&&YTP&&((k==='shadow'&&DB.ui.tab==='pShadow')||(k==='script'&&DB.ui.tab==='pScript'))){try{YTP.setPlaybackRate(nearRate(DB.speed[k]/100));}catch(e){}}}
 
 /* ---------- ③ 스크립트 드럼 ---------- */
 const DR={idx:0,lastCenter:-1,raf:0,user:false,settleT:null,prog:false};
@@ -555,7 +563,7 @@ function renderDrum(){const c=learning();const box=$('#drumIn'),msg=$('#scMsg');
   msg.innerHTML='';$('.ctrl').style.visibility='';
   box.innerHTML='<div class="pad"></div>'+c.sents.map((s,i)=>`<p data-i="${i}">${drumLine(c,i)}</p>`).join('')+'<div class="pad"></div>';
   DR.idx=Math.min(c.scIdx||0,c.sents.length-1);DR.lastCenter=DR.idx;drumPads();scrollDrumTo(DR.idx,false);}
-function drumLine(c,i){const s=c.sents[i];return `${isSaved(c,i)?SVI:''}${esc(s.en)}${s.ko?'':`<span class="noko"><i></i>(${i+1})</span>`}`;}
+function drumLine(c,i){const s=c.sents[i];return `${isSaved(c,i)?SVI:''}${markHTML(s.en)}${s.ko?'':`<span class="noko"><i></i>(${i+1})</span>`}`;}
 function drumPads(){const d=$('#drum');const h=d.clientHeight;$$('#drum .pad').forEach(p=>p.style.height=Math.max(0,h/2-12)+'px');shadeDrum();}
 function scrollDrumTo(i,smooth){const d=$('#drum'),p=$(`#drum p[data-i="${i}"]`);if(!p)return;DR.prog=true;
   const top=p.offsetTop+p.offsetHeight/2-d.clientHeight/2;d.scrollTo({top,behavior:smooth?'smooth':'auto'});if(!smooth){shadeDrum();setTimeout(()=>DR.prog=false,50);}else setTimeout(()=>DR.prog=false,450);}
@@ -581,14 +589,24 @@ function shadeDrum(){if(EDIT)return;const d=$('#drum');const mid=d.scrollTop+d.c
   if(ci!==DR.lastCenter){DR.lastCenter=ci;if(DR.user)SFX.tick();}   /* 손으로 돌릴 때만 틱 (탭 전환·영상 접기로 칸 크기가 바뀔 땐 조용히) */}
 $('#drum').addEventListener('scroll',()=>{if(EDIT)return;if(!DR.raf)DR.raf=requestAnimationFrame(()=>{DR.raf=0;shadeDrum();});
   clearTimeout(DR.settleT);DR.settleT=setTimeout(()=>{if(DR.touch)return;if(DR.prog&&!DR.user)return;const ci=centerIndex();if(ci!==DR.idx){DR.idx=ci;scCount();const c=learning();if(c){c.scIdx=ci;save();}if(DR.user)playDrum();}DR.user=false;},160);},{passive:true});
-$('#drum').addEventListener('touchstart',()=>{DR.user=true;DR.prog=false;DR.touch=true;},{passive:true});
+$('#drum').addEventListener('pointerdown',stopFollowByTouch,{capture:true});
+$('#drum').addEventListener('touchstart',()=>{stopFollowByTouch();DR.user=true;DR.prog=false;DR.touch=true;},{passive:true});
 $('#drum').addEventListener('touchend',()=>{DR.touch=false;$('#drum').dispatchEvent(new Event('scroll'));},{passive:true});
-$('#drum').addEventListener('wheel',()=>{DR.user=true;},{passive:true});
-function playDrum(){const c=learning();if(!c)return;const s=c.sents[DR.idx];playRange(c.vid,...rangeOf(c,DR.idx),DB.speed.script);}
+$('#drum').addEventListener('wheel',()=>{stopFollowByTouch();DR.user=true;},{passive:true});
+/* 스크립트 탭에서 영상을 터치해 재생하면: 건너뛰지 않고 계속 재생, 드럼이 조용히 지금 대사를 따라감.
+   영상을 다시 터치하거나 드럼을 건드리면 멈추고 그 문장에 머묾 */
+let FOLLOW=null,FOLLOW_END=0;
+function startFollow(){const c=learning();if(FOLLOW||!c||!c.sents||!c.sents.length)return;try{YTP.setPlaybackRate(nearRate(DB.speed.script/100));}catch(e){}
+  FOLLOW=setInterval(()=>{const c=learning();if(PLAY||EDIT||DB.ui.tab!=='pScript'||!c||!c.sents){stopFollow();return;}let t=0;try{t=YTP.getCurrentTime();}catch(e){return;}
+    const L=c.sents;let lo=0,hi=L.length-1,k=0;while(lo<=hi){const m=(lo+hi)>>1;if(L[m].start<=t+0.05){k=m;lo=m+1;}else hi=m-1;}
+    if(k!==DR.idx){DR.idx=k;c.scIdx=k;save();DR.user=false;scCount();scrollDrumTo(k,true);}},200);}
+function stopFollow(){if(!FOLLOW)return;clearInterval(FOLLOW);FOLLOW=null;FOLLOW_END=Date.now();}
+function stopFollowByTouch(){if(!FOLLOW)return;stopFollow();try{YTP.pauseVideo();}catch(e){}}
+function playDrum(){const c=learning();if(!c)return;const s=c.sents[DR.idx];if(isSkip(s))return;/* ~ 문장은 재생 안 함 */playRange(c.vid,...rangeOf(c,DR.idx),DB.speed.script);}
 function drumGo(i){const c=learning();if(!c)return;if(i<0){toast('첫 문장이에요');return;}if(i>=c.sents.length){toast('마지막 문장이에요');return;}
   DR.idx=i;c.scIdx=i;save();scCount();scrollDrumTo(i,true);playDrum();}
 (()=>{let sx=0,sy=0,t0=0;const d=$('#drum');d.addEventListener('pointerdown',e=>{sx=e.clientX;sy=e.clientY;t0=Date.now();});
-  d.addEventListener('pointerup',e=>{if(EDIT||Date.now()-EDIT_END<600)return;if(Math.abs(e.clientX-sx)<8&&Math.abs(e.clientY-sy)<8&&Date.now()-t0<400){const r=d.getBoundingClientRect();if(e.clientX<r.left+r.width/2)drumGo(DR.idx);else drumGo(DR.idx+1);}});})();   // 왼쪽 반 = 한 번 더, 오른쪽 반 = 다음 문장
+  d.addEventListener('pointerup',e=>{if(EDIT||Date.now()-EDIT_END<600||Date.now()-FOLLOW_END<600)return;   /* 따라가기를 멈춘 터치는 재생 안 함 */if(Math.abs(e.clientX-sx)<8&&Math.abs(e.clientY-sy)<8&&Date.now()-t0<400){const r=d.getBoundingClientRect();if(e.clientX<r.left+r.width/2)drumGo(DR.idx);else drumGo(DR.idx+1);}});})();   // 왼쪽 반 = 한 번 더, 오른쪽 반 = 다음 문장
 
 /* ---------- ③-1 스크립트 직접 수정 ----------
    드럼에서 문장 꾹 → 그 문장과 위아래 2줄(최대 5줄)이 그 자리에서 편집 상태로 바뀜. 드럼·영상 멈춤, 가운데 남색 빛 끔.
@@ -606,7 +624,7 @@ const ED_SPAN=2;
   const release=e=>{if(lp){clearTimeout(lp.tm);lp=null;return;}if(!EDIT||!EDIT.needFocus)return;EDIT.needFocus=false;
     const pt=e.changedTouches?e.changedTouches[0]:e;focusEditor(pt.clientX,pt.clientY);};
   document.addEventListener('pointerup',release,true);document.addEventListener('touchend',release,true);})();
-function startEdit(i,x,y){const c=learning();if(!c||!c.sents||!c.sents[i]||EDIT)return;
+function startEdit(i,x,y){const c=learning();if(!c||!c.sents||!c.sents[i]||EDIT)return;stopFollow();
   SFX.peek();pausePlayer();
   const a=Math.max(0,i-ED_SPAN),b=Math.min(c.sents.length-1,i+ED_SPAN);
   const d=$('#drum');d.classList.add('editing');$$('#drum p').forEach(p=>p.style.textShadow='');
@@ -659,7 +677,7 @@ function applyEdit(c,a,b,press,lines){const old=c.sents.slice(a,b+1);
     for(let q=i;q<k;q++){nwd[q].t0=lo+step*(q-i);nwd[q].t1=lo+step*(q-i+1);}i=k;}
   const used=new Set();let oj=0;
   const out=lines.map((en,li)=>{   /* 글자 그대로인 문장은 원래 것(시간·해석) 그대로 */
-    for(let j=oj;j<old.length;j++)if(!used.has(j)&&old[j].en===en){used.add(j);oj=j+1;return old[j];}
+    for(let j=oj;j<old.length;j++)if(!used.has(j)&&plainEn(old[j].en)===plainEn(en)){used.add(j);oj=j+1;old[j].en=en;return old[j];}   /* @·~만 바뀐 문장도 그대로 */
     const ws=nwd.filter(x=>x.li===li);let st=ws.length?ws[0].t0:S0,ed=ws.length?ws[ws.length-1].t1:S1;
     old.forEach(o=>{if(Math.abs(st-o.start)<0.15)st=o.start;if(Math.abs(ed-o.end)<0.25)ed=o.end;});   /* 원래 문장 경계와 거의 같으면 그 경계로 */
     if(!(ed>st))ed=st+0.3;return {start:+st.toFixed(3),end:+ed.toFixed(3),en,ko:''};});
@@ -678,7 +696,7 @@ function applyEdit(c,a,b,press,lines){const old=c.sents.slice(a,b+1);
 /* 바뀐 문장만 해석 다시 받기 (앞뒤 문장은 문맥으로) */
 async function retranslate(c,list){if(!DB.settings.key.trim()){toast('API 키가 없어서 고친 문장은 해석 없이 저장했어요',2800);return;}
   const idx=list.map(s=>c.sents.indexOf(s)).filter(i=>i>=0);if(!idx.length)return;
-  const ctx=c.sents.slice(Math.max(0,idx[0]-3),idx[idx.length-1]+4).map(s=>s.en).join('\n');
+  const ctx=c.sents.slice(Math.max(0,idx[0]-3),idx[idx.length-1]+4).map(s=>plainEn(s.en)).join('\n');
   const prompt=`These are consecutive lines from an English video (often a dialogue). Translate each numbered line into natural, conversational Korean, using the context.
 Return JSON only: {"ko":{"<number>":"<Korean>", ...}} with every number. Translate each line on its own — never merge two lines into one translation.
 
@@ -686,7 +704,7 @@ Context:
 ${ctx}
 
 Lines to translate:
-${idx.map((i,k)=>`${k}: ${c.sents[i].en}`).join('\n')}`;
+${idx.map((i,k)=>`${k}: ${plainEn(c.sents[i].en)}`).join('\n')}`;
   try{const m=parseJSON(await gemini([{text:prompt}],'script',{timeout:60000,wait429:true,config:{maxOutputTokens:4096}}))||{};const ko=m.ko||m;
     let miss=0;list.forEach((s,k)=>{const v=ko[k]??ko[String(k)];if(v&&String(v).trim())s.ko=String(v).trim();else miss++;});
     c.noKo=c.sents.every(s=>!s.ko);save();
@@ -793,7 +811,7 @@ $('#vFile').addEventListener('change',async e=>{const file=e.target.files&&e.tar
 /* ---------- 쉐도잉 n / nn 터치 → 그 자리에서 문장 번호 입력 (숫자패드, 넘치면 마지막 문장) ---------- */
 (()=>{const em=$('#shCount');let inp=null;
   const close=go=>{if(!inp)return;const v=inp.value.trim(),c=learning();const el=inp;inp=null;el.remove();
-    if(go&&v&&v!==String(SH.idx+1)&&c&&c.sents&&c.sents.length){let n=parseInt(v,10);if(isFinite(n)){n=Math.max(1,Math.min(c.sents.length,n));SFX.tok();SH.idx=n-1;enterSentence(false);return;}}
+    if(go&&v&&v!==String(SH.idx+1)&&c&&c.sents&&c.sents.length){let n=parseInt(v,10);if(isFinite(n)){n=Math.max(1,Math.min(c.sents.length,n));SFX.tok();const k=shIdx(c,n-1);if(k>=0){SH.idx=k;enterSentence(false);}return;}}
     if(c&&c.sents)em.textContent=`${SH.idx+1} / ${c.sents.length}`;};
   em.addEventListener('pointerdown',e=>e.stopPropagation());
   em.addEventListener('click',e=>{e.stopPropagation();const c=learning();if(inp||!c||!c.sents||!c.sents.length||SH.phase==='rec'||SH.phase==='wait')return;
