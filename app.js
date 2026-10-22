@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.8.1 */
+/* Goshé. — 고성능 쉐도잉 v1.8.2 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.8.1').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.8.2').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -474,10 +474,12 @@ async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done'
   const one=ok&&SH.listens<=1;setTimeout(()=>{ok?(one?SFX.perfect():SFX.ok()):SFX.ng();setMic('arrow');},175);
   const c=learning();if(c){c.res=c.res||{};c.res[SH.idx]=ok?1:0;save();}}
 $('#micBtn').onclick=()=>{if(SH.phase==='idle')startRec();else if(SH.phase==='rec'){SFX.tok();stopRec();}else if(SH.phase==='done'){SFX.tok();gotoSentence(1);}};
-/* 왼쪽 밀기로 넘길 때 아직 안 끝난 문장이면: 먼저 영문장·해석을 다 보여주고(소리·결과 기록 없음), 한 번 더 밀면 다음 문장 */
+/* 왼쪽 밀기로 넘길 때 아직 안 끝난 문장이면: 먼저 영문장·해석을 한 번에 다 보여주고(삑, 결과 기록 없음), 한 번 더 밀면 다음 문장(소리 없음) */
 function skipReveal(){const c=learning();if(!c||SH.done||SH.phase==='rec'||SH.phase==='wait')return false;   /* 마지막 문장도 보여줌 — 한 번 더 밀면 '마지막 문장이에요' */
-  SH.done=true;SH.phase='done';closeWord(true);const rest=SH.words.map((_,i)=>i).filter(i=>!SH.revealed.has(i));rest.forEach(i=>SH.revealed.add(i));revealWords(rest);
-  drawListen();if($('#shKo').textContent)$('#shKo').classList.add('on');setMic('arrow');return true;}
+  SH.done=true;SH.phase='done';closeWord(true);SFX.tok();   /* 삑 — 애니메이션 없이 한 번에 */
+  SH.words.forEach((_,i)=>SH.revealed.add(i));$$('#shSent .w').forEach(w=>w.classList.add('r'));
+  const ko=$('#shKo');ko.style.transition='none';drawListen();if(ko.textContent)ko.classList.add('on');void ko.offsetWidth;ko.style.transition='';
+  setMic('arrow');return true;}
 /* 문장 영역: 좌우 밀기 = 이전/다음, 단어 꾹 = 뜻, 가려진 단어 탭 = 한 문장에 한 단어만 열기 (감탄사·대명사처럼 인식이 안 돼 막힐 때) */
 function peekWord(w){if(!w||w.classList.contains('r')||SH.done||SH.peeked||SH.phase!=='idle')return;const i=+w.dataset.i;if(SH.revealed.has(i))return;
   SH.peeked=true;SFX.peek();SH.revealed.add(i);revealWords([i]);
