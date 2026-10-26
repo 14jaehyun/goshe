@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.8.3 */
+/* Goshé. — 고성능 쉐도잉 v1.8.4 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.8.3').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.8.4').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -143,7 +143,9 @@ $$('.tab').forEach(b=>gesture(b,{long:()=>{const t=b.dataset.t,c=learning();if(t
   else if(t==='pShadow'){if(SH.phase==='rec'||SH.phase==='wait')return;TABLONG=Date.now();SFX.peek();c.scIdx=SH.idx;save();setTab('pScript',false);}}}));
 function setFold(f){document.body.classList.toggle('folded',f);DB.ui.folded=f;save();setTimeout(layout,270);}
 $('#fold').onclick=()=>{SFX.tok();setFold(!DB.ui.folded);};
-(()=>{const L=$('#logo');const on=()=>{if(!L.classList.contains('on'))SFX.logo();L.classList.add('on');},off=()=>L.classList.remove('on');
+(()=>{const L=$('#logo'),N=L.querySelector('.lB .n'),W=['고성능','고강도','고반복','고정밀','고밀도','고집중','고순도','고효율'];let first=true;
+  const pick=()=>{if(first){first=false;N.textContent=W[0];return;}let w;do{w=W[Math.floor(Math.random()*W.length)];}while(w===N.textContent);N.textContent=w;}; // 앱 열고 첫 터치는 고성능, 이후 랜덤(직전과 같은 말은 피함)
+  const on=()=>{if(!L.classList.contains('on')){pick();SFX.logo();}L.classList.add('on');},off=()=>L.classList.remove('on');
   L.addEventListener('pointerdown',on);['pointerup','pointercancel','pointerleave'].forEach(e=>L.addEventListener(e,off));})();
 function layout(){
   // 쉐도잉: 접으면 버튼(과 그 위 듣기 횟수 점)도 비율 맞춰 위로
