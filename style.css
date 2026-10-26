@@ -27,6 +27,7 @@ body.folded #fold i{border-bottom:none;border-top:6px solid #8a97a6}
 /* 로고 */
 #logo{position:relative;flex:none;box-sizing:border-box;width:calc((100% + 40px) * 2 / 3);height:52px;margin-left:-20px;padding-left:20px;font-size:23px;font-weight:800;font-style:italic;letter-spacing:-.01em;white-space:nowrap}
 #logo .n{color:var(--navy)}
+#logo .t.ban{color:#C9A000}
 #logo .lA,#logo .lB{position:absolute;left:20px;top:11px;line-height:30px;transition:opacity .12s ease,letter-spacing .22s ease,transform .22s ease;transform-origin:left center}
 #logo .lB{opacity:0;letter-spacing:-.12em;transform:scaleX(.7)}
 #logo.on .lA{opacity:0;letter-spacing:.15em}
