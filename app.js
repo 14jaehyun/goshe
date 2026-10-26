@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.8.6 */
+/* Goshé. — 고성능 쉐도잉 v1.8.7 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.8.6').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.8.7').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -145,7 +145,7 @@ function setFold(f){document.body.classList.toggle('folded',f);DB.ui.folded=f;sa
 $('#fold').onclick=()=>{SFX.tok();setFold(!DB.ui.folded);};
 (()=>{const L=$('#logo'),N=L.querySelector('.lB .n'),T=L.querySelector('.lB .t'),W=['고성능','고강도','고반복','고정밀','고밀도','고집중','고순도','고효율'];let rep=0,last=0,vocN=0; // vocN: 단어장 탭에서 누른 횟수(이스터에그)
   const pick=()=>{const t=Date.now(),reset=!last||t-last>10000;last=t;let w; // 앱 첫 터치·마지막 터치 후 10초 지나면 고성능
-    if(DB.ui.tab==='pVocab'&&++vocN===21)W.push('고당도'); // 이스터에그: 단어장에서 20번 넘게 누르면 '고당도 바나나.'가 후보에 추가(앱 끄면 초기화)
+    if(reset||DB.ui.tab!=='pVocab')vocN=0;if(DB.ui.tab==='pVocab'&&++vocN===21&&!W.includes('고당도'))W.push('고당도'); // 이스터에그: 단어장에서 10초 안 끊기고 20번 넘게 누르면 '고당도 바나나.'가 후보에 추가(앱 끄면 초기화)
     if(reset){w=W[0];rep=0;}else if(rep>0){w=W[0];}else w=W[Math.floor(Math.random()*W.length)]; // 그 외엔 순수 랜덤(같은 말 허용)
     if(w===W[0]){if(rep>0)rep--;else rep=1+Math.floor(Math.random()*3);} // 고성능이 나오면 총 2~4회 연속
     const ban=w==='고당도';N.textContent=w;T.textContent=ban?'바나나':'쉐도잉';T.classList.toggle('ban',ban);};
