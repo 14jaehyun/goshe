@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.8.10 */
+/* Goshé. — 고성능 쉐도잉 v1.8.11 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -17,10 +17,7 @@ function save(now){clearTimeout(saveT);const f=()=>{try{localStorage.setItem(KEY
 const clipById=id=>DB.clips.find(c=>c.id===id);
 const learning=()=>clipById(DB.learningId);
 
-function toast(t,ms=2200){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);
-  /* 스크립트 탭: 드럼 맨 위와 현재 문장(가운데) 사이 한가운데에 */
-  const dr=document.querySelector('#drum');if(DB.ui.tab==='pScript'&&dr&&dr.clientHeight){const r=dr.getBoundingClientRect();d.style.top=Math.round(r.top+r.height/4-d.offsetHeight/2)+'px';}
-  setTimeout(()=>d.remove(),ms);}
+function toast(t,ms=2200){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),ms);}
 
 /* ---------- 효과음 ---------- */
 let AC=null,OUT=null,MICOPEN=false;
@@ -31,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.8.10').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.8.11').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
