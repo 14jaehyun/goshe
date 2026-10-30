@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.8.8 */
+/* Goshé. — 고성능 쉐도잉 v1.8.9 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.8.8').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.8.9').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -701,7 +701,7 @@ function applyEdit(c,a,b,press,lines){const old=c.sents.slice(a,b+1);
   renderDrum();standbyFor('pScript');
   const fresh=out.filter(s=>!s.ko);if(fresh.length)retranslate(c,fresh);}
 /* 바뀐 문장만 해석 다시 받기 (앞뒤 문장은 문맥으로) */
-async function retranslate(c,list){if(!DB.settings.key.trim()){toast('API 키가 없어서 고친 문장은 해석 없이 저장했어요',2800);return;}
+async function retranslate(c,list,opt={}){if(!DB.settings.key.trim()){toast('API 키가 없어서 고친 문장은 해석 없이 저장했어요',2800);return;}
   const idx=list.map(s=>c.sents.indexOf(s)).filter(i=>i>=0);if(!idx.length)return;
   const ctx=c.sents.slice(Math.max(0,idx[0]-3),idx[idx.length-1]+4).map(s=>plainEn(s.en)).join('\n');
   const prompt=`These are consecutive lines from an English video (often a dialogue). Translate each numbered line into natural, conversational Korean, using the context.
@@ -716,8 +716,30 @@ ${idx.map((i,k)=>`${k}: ${plainEn(c.sents[i].en)}`).join('\n')}`;
     let miss=0;list.forEach((s,k)=>{const v=ko[k]??ko[String(k)];if(v&&String(v).trim())s.ko=String(v).trim();else miss++;});
     c.noKo=c.sents.every(s=>!s.ko);save();
     if(learning()===c&&!EDIT)list.forEach(s=>{const i=c.sents.indexOf(s);const p=i>=0&&$(`#drum p[data-i="${i}"]`);if(p)p.innerHTML=drumLine(c,i);});
-    if(miss)toast(`${miss}문장은 해석을 못 받았어요`,2600);}
-  catch(e){toast(errMsg(e),2800);}}
+    if(opt.quiet)return miss;if(miss)toast(`${miss}문장은 해석을 못 받았어요`,2600);}
+  catch(e){if(opt.quiet)throw e;toast(errMsg(e),2800);}}
+/* 스크립트 탭 드럼을 오른쪽으로 당기기 → 해석 없는 문장만 다시 받기 (묻지 않음, 소리 없음) */
+let RETRY_KO=false;
+async function retryMissingKo(){const c=learning();if(!c||!c.sents||!c.sents.length)return;
+  if(RETRY_KO){toast('해석 다시 받는 중이에요');return;}
+  if(!DB.settings.key.trim()){toast(errMsg({message:'nokey'}),2800);return;}
+  const miss=c.sents.map((s,i)=>s.ko||isSkip(s)?-1:i).filter(i=>i>=0);if(!miss.length){toast('해석 안 된 문장이 없어요');return;}
+  /* 가까운 문장끼리 묶어서(최대 30문장, 범위 60줄) 나눠 요청 */
+  const groups=[];let g=[];miss.forEach(i=>{if(g.length&&(g.length>=30||i-g[0]>60)){groups.push(g);g=[];}g.push(i);});if(g.length)groups.push(g);
+  RETRY_KO=true;toast(`해석 다시 받는 중… (${miss.length}문장)`,1800);let left=0;
+  try{for(const gr of groups){if(learning()!==c)break;left+=await retranslate(c,gr.map(i=>c.sents[i]),{quiet:true})||0;}
+    const ok=miss.length-left;toast(left?`${ok}문장 해석 완료 · ${left}문장은 아직 안 됐어요`:`${ok}문장 해석 완료`,2600);
+    const s=c.sents[c.lastIdx||0];if(learning()===c&&s&&s.ko&&!$('#shKo').textContent)$('#shKo').textContent=s.ko;}
+  catch(e){toast(errMsg(e),2800);}
+  finally{RETRY_KO=false;}}
+(()=>{const d=$('#drum'),inn=$('#drumIn');let st=null;
+  const back=()=>{inn.style.transition='transform .22s cubic-bezier(.2,.8,.3,1)';inn.style.transform='';setTimeout(()=>inn.style.transition='',240);};
+  d.addEventListener('touchstart',e=>{if(EDIT||e.touches.length>1){st=null;return;}const t=e.touches[0];st={x:t.clientX,y:t.clientY,mode:'',dx:0};},{passive:true});
+  d.addEventListener('touchmove',e=>{if(!st||EDIT)return;const t=e.touches[0];const dx=t.clientX-st.x,dy=t.clientY-st.y;
+    if(!st.mode){const ax=Math.abs(dx),ay=Math.abs(dy);if(dx>12&&ax>ay*1.5)st.mode='h';else if(ay>8||ax>12){st=null;return;}else return;}
+    e.preventDefault();st.dx=Math.max(0,dx);inn.style.transition='';inn.style.transform=`translateX(${Math.min(st.dx,140)*0.5}px)`;},{passive:false});
+  const end=()=>{if(!st)return;const S=st;st=null;if(S.mode!=='h')return;back();if(S.dx>70)retryMissingKo();};
+  d.addEventListener('touchend',end,{passive:true});d.addEventListener('touchcancel',()=>{if(st&&st.mode==='h')back();st=null;},{passive:true});})();
 
 /* ---------- ④ 단어장 ---------- */
 function movePill(){const t=$('#vToggle'),b=t.querySelector(`button[data-m="${DB.ui.vmode}"]`),p=t.querySelector('.pill');if(!b)return;

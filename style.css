@@ -209,6 +209,7 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 .bm{width:36px;height:36px;margin:-5px 0 0;display:flex;align-items:flex-start;justify-content:flex-end;padding-top:6px;color:#c3ccd6}   /* 아이콘 25px, 위쪽을 번호 글자 위쪽에 맞춤 */   /* 아이콘은 오른쪽 끝(번호 쪽)에, 누르는 칸은 넓게 */
 .bm.on{color:var(--navy)}.bm.on svg path{fill:var(--navy)}   /* 말하기 버튼 색, 글로우 없음 */
 #drum{padding-left:14px;margin-left:-14px}   /* 저장 표시가 들어갈 왼쪽 여백 (글자 시작 위치는 그대로) */
+#drum{overflow-x:hidden;touch-action:pan-y}   /* 오른쪽 당기기(해석 다시 받기)용 */
 #drum p{position:relative}
 #drum p .sv{position:absolute;left:-13px;top:50%;width:9px;height:11px;margin-top:-6px;color:var(--faint)}   /* 글자 왼쪽 여백에 — 문장은 모두 같은 자리에서 시작 */
 #savedList p{display:flex;gap:10px;font-size:13.5px;line-height:1.4;padding:9px 0;border-bottom:1px solid var(--line);color:var(--ink)}
