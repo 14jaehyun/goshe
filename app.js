@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.9.2 */
+/* Goshé. — 고성능 쉐도잉 v1.9.3 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.9.2').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.9.3').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -329,15 +329,15 @@ ${list.map(i=>`${i}: ${sents[i].en}`).join('\n')}`;
 /* ---------- 스크립트 마크: 문장 앞 ~ = 쉐도잉에서 통째로 건너뜀(스크립트에서도 재생 안 함), 단어 앞 @ = 처음부터 보이고 판정에서 뺌 ---------- */
 const isSkip=s=>!!s&&/^\s*~/.test(s.en);
 const plainEn=en=>String(en).replace(/^\s*~\s*/,'').replace(/\s*#\s*/g,' ').trim().replace(/(^|\s)@(?=\S)/g,'$1');
-/* # = 문장 안 덩어리 나누기. 타원을 켠 문장은 덩어리 1→2→…→전체 문장 순서로 쉐도잉, 해석은 전체 문장 단계에서만 */
+/* # = 문장 안 덩어리 나누기. 마이크를 밀어 켠 문장은 덩어리 1→2→…→전체 문장 순서로 쉐도잉, 해석은 전체 문장 단계에서만 */
 const chunksOf=s=>String(s.en).replace(/^\s*~\s*/,'').split('#').map(x=>x.trim()).filter(x=>x.replace(/@/g,'').trim());
 const nChunks=s=>{const n=chunksOf(s).length;return n>1?n:1;};
-const stepsOf=(c,i)=>{const n=nChunks(c.sents[i]);return SH.on&&i===SH.idx&&n>1?[...Array(n).keys(),-1]:[-1];};   /* -1 = 전체 문장. 덩어리는 타원을 켠 그 문장에만 */
+const stepsOf=(c,i)=>{const n=nChunks(c.sents[i]);return SH.on&&i===SH.idx&&n>1?[...Array(n).keys(),-1]:[-1];};   /* -1 = 전체 문장(Rt). 덩어리는 마이크를 밀어 켠 그 문장에만 */
 const firstPart=(c,i)=>stepsOf(c,i)[0];
-/* 덩어리 시간: 문장 시간을 글자 수 비율로 나눠 추정. 앞뒤 여유를 조금 줌 */
+/* 덩어리 시간: 문장 시간을 글자 수 비율로 나눠 추정 */
 function partRange(c,i,p){const r=rangeOf(c,i);if(p<0)return r;const s=c.sents[i],ch=chunksOf(s);const len=ch.map(x=>plainEn(x).length+1),tot=len.reduce((a,b)=>a+b,0);
   const before=len.slice(0,p).reduce((a,b)=>a+b,0),d=s.end-s.start;
-  const a=p===0?r[0]:s.start+d*before/tot-0.1,b=p===ch.length-1?r[1]:s.start+d*(before+len[p])/tot+0.25;return [Math.max(0,a),b];}
+  const a=p===0?r[0]:s.start+d*before/tot-PRE,b=p===ch.length-1?r[1]:s.start+d*(before+len[p])/tot+POST;   /* 덩어리 경계도 문장과 같은 여유 */return [Math.max(0,a),b];}
 function cntText(c){return `${SH.idx+1} / ${c.sents.length}`;}
 const markHTML=en=>esc(en).replace(/^(\s*)~\s*/,'$1<span class="mk">~</span>').replace(/(&#?\w+;)|\s*#\s*/g,(m,ent)=>ent||' <span class="mk">#</span> ').replace(/(^|\s)@(?=\S)/g,'$1<span class="mk">@</span>');
 /* i부터 가까운 쉐도잉 문장(~ 아닌 문장): 앞으로 먼저, 없으면 뒤로 */
@@ -378,6 +378,7 @@ function matchWords(words,said){const tt=[],owner=[];words.forEach((w,i)=>canon(
 
 /* ---------- ② 쉐도잉 ---------- */
 const SH={idx:0,part:-1,on:false,listens:0,revealed:new Set(),done:false,phase:'idle',words:[],peeked:false};   // phase: idle | rec | wait | done
+const MD={x:0,D:52,anim:0,leave:false,end:0,idx:-1,hash:false,fading:false};   // 마이크 밀기(덩어리 모드) 상태
 const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   stop:'<svg width="28" height="28" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="#fff"/></svg>',
   arrow:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
@@ -385,7 +386,7 @@ const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" str
   wait:'<span class="busy"></span><span class="busy"></span><span class="busy"></span>',
   cry:'<svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><path d="M20 26h8M36 26h8M25 40h14"/></svg>',
   speaker:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.5a7.5 7.5 0 0 1 0 11"/></svg>'};
-function setMic(k){const b=$('#micBtn');b.innerHTML=ICON[k];b.disabled=(k==='wait');}
+function setMic(k){const b=$('#micBtn');$('#micIco').innerHTML=ICON[k];b.disabled=(k==='wait');}
 function renderShadow(play){const c=learning();const msg=$('#shMsg');
   const show=on=>{['.top','.trz','#shSent','.micwrap'].forEach(s=>$(s).style.visibility=on?'':'hidden');};
   if(!c||!c.sents||!c.sents.length){show(false);msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';return;}
@@ -401,7 +402,7 @@ function enterSentence(play){const c=learning();if(!c)return;const s=c.sents[SH.
   $('#shKo').textContent=SH.part<0?s.ko||'':'';$('#shKo').classList.remove('on');   /* 덩어리 단계엔 해석 없음 */
   $$('.dot').forEach(d=>d.classList.remove('f'));
   const L=$('#lights');L.classList.remove('ok','ng');$$('#lights .dot').forEach(d=>d.getAnimations().forEach(a=>a.cancel()));
-  $('#shCount').textContent=cntText(c);drawHash(c);drawBm();setMic('mic');drawListen();
+  $('#shCount').textContent=cntText(c);micMode(c);drawBm();setMic('mic');drawListen();
   c.lastIdx=SH.idx;c.lastPart=SH.part;c.lastOn=SH.on;save();requestAnimationFrame(layout);
   }
 /* 사람 이름(별명 포함)은 처음부터 보여주고 판정에서 뺌. 지명·제목·브랜드는 숨김.
@@ -501,7 +502,7 @@ async function finishSentence(ok){if(SH.done)return;SH.done=true;SH.phase='done'
   $$('#lights .dot').forEach(d=>d.animate([{boxShadow:sh(0)},{boxShadow:sh(1),offset:.2,easing:'ease-out'},{boxShadow:sh(0)}],{duration:600}));
   const one=ok&&SH.listens<=1;setTimeout(()=>{ok?(one?SFX.perfect():SFX.ok()):SFX.ng();setMic('arrow');},175);
   const c=learning();if(c&&SH.part<0){c.res=c.res||{};c.res[SH.idx]=ok?1:0;save();}}
-$('#micBtn').onclick=()=>{if(SH.phase==='idle')startRec();else if(SH.phase==='rec'){SFX.tok();stopRec();}else if(SH.phase==='done'){SFX.tok();gotoSentence(1);}};
+$('#micBtn').onclick=()=>{if(Date.now()-MD.end<350)return;if(SH.phase==='idle')startRec();else if(SH.phase==='rec'){SFX.tok();stopRec();}else if(SH.phase==='done'){SFX.tok();gotoSentence(1);}};
 /* 왼쪽 밀기로 넘길 때 아직 안 끝난 문장이면: 먼저 영문장·해석을 한 번에 다 보여주고(삑, 결과 기록 없음), 한 번 더 밀면 다음 문장(소리 없음) */
 function skipReveal(){const c=learning();if(!c||SH.done||SH.phase==='rec'||SH.phase==='wait')return false;   /* 마지막 문장도 보여줌 — 한 번 더 밀면 '마지막 문장이에요' */
   SH.done=true;SH.phase='done';closeWord(true);SFX.tok();   /* 삑 — 애니메이션 없이 한 번에 */
@@ -850,11 +851,40 @@ $('#vFile').addEventListener('change',async e=>{const file=e.target.files&&e.tar
   list.forEach(v=>{const k=v.en.toLowerCase();if(have.has(k))return;have.add(k);DB.vocab.push({en:v.en,ko:v.ko});n++;});
   save();renderVocab();toast(n?`${n}개 가져왔어요`:'새로 추가할 단어가 없어요');});
 
-/* # 문장 타원: 평소엔 없음. # 문장이면 흐린 푸른 타원에 덩어리 수(#3), 터치(삑) → 초록으로 켜지고 그 문장만 덩어리 1→2→3→전체. 다시 터치 → 전체 쉐도잉 */
-function drawHash(c){const h=$('#shHash');const n=nChunks(c.sents[SH.idx]);if(n<2){h.hidden=true;return;}h.hidden=false;
-  h.classList.toggle('on',SH.on);h.textContent='#'+(SH.on?(SH.part<0?n:SH.part+1):n);}
-(()=>{const h=$('#shHash');h.addEventListener('pointerdown',e=>e.stopPropagation());
-  gesture(h,{tap:()=>{const c=learning();if(!c||!c.sents||SH.phase==='rec'||SH.phase==='wait')return;SFX.tok();SH.on=!SH.on;SH.part=SH.on?0:-1;enterSentence(false);}});})();
+/* ---------- # 문장: 마이크 버튼 밀기 ----------
+   # 문장에 들어오면 버튼 안 마이크 오른쪽에 흰 #이 빠르게 나타남. 버튼을 오른쪽으로 밀면(52px, 우하단 그림자) 덩어리 모드:
+   #은 화면에 고정이라 지나가는 마이크 그림 뒤로 흐려졌다 다시 보임, 다 밀리면 원래 자리 칸에 1/3이 팟(톡).
+   덩어리 1→2→…→Rt(전체 문장 반복, 애니메이션 없이), Rt 끝나고 화살표 = 다음 문장(버튼이 돌아가며 #도 같이 사라짐). 왼쪽으로 밀면 취소 */
+function micX(v){MD.x=v;const b=$('#micBtn'),k=v/MD.D;b.style.transform=v?`translateX(${v}px)`:'';
+  b.style.boxShadow=k?`0 ${6+6*k}px ${18+10*k}px rgba(79,109,138,${(.3+.15*k).toFixed(3)}), ${(4*k).toFixed(1)}px ${(3*k).toFixed(1)}px ${(10*k).toFixed(1)}px rgba(31,42,55,${(.25*k).toFixed(3)})`:'';
+  const mh=$('#mh');mh.style.transform=v?`translateX(${-v}px)`:'';
+  if(MD.hash&&!MD.fading){let op=Math.min(1,Math.max(0,(Math.abs(v-25)-4)/14));if(MD.leave)op=Math.min(op,k);mh.style.opacity=op.toFixed(2);}}
+function micSlide(to,done){cancelAnimationFrame(MD.anim);const from=MD.x,t0=performance.now(),ms=220;$('#slot').classList.remove('num');
+  const f=n=>{const k=Math.min(1,(n-t0)/ms),e=1-Math.pow(1-k,3);micX(from+(to-from)*e);if(k<1)MD.anim=requestAnimationFrame(f);else{MD.anim=0;done&&done();}};MD.anim=requestAnimationFrame(f);}
+function slotText(c){const n=nChunks(c.sents[SH.idx]);$('#slotT').textContent=SH.part<0?'Rt':`${SH.part+1}/${n}`;$('#slot').classList.toggle('num',SH.on&&MD.x>=MD.D);}
+/* 문장에 들어올 때마다: # 표시·칸·버튼 위치 맞춤 */
+function micMode(c){const n=nChunks(c.sents[SH.idx]),hash=n>1,fresh=MD.idx!==SH.idx,mh=$('#mh');MD.idx=SH.idx;
+  const apply=()=>{MD.hash=hash;$('#slot').hidden=!hash;MD.leave=false;
+    if(!hash){mh.style.opacity=0;}else if(fresh&&!SH.on){mh.getAnimations().forEach(a=>a.cancel());MD.fading=true;mh.style.opacity=1;   /* 빠른 페이드인 */
+      mh.animate([{opacity:0},{opacity:1}],{duration:160,easing:'ease-out'}).onfinish=()=>{MD.fading=false;micX(MD.x);};}
+    micX(MD.x);slotText(c);};
+  const target=SH.on&&hash?MD.D:0;
+  if(fresh&&MD.anim===0&&$('#micBtn').offsetParent===null){micX(target);}   /* 화면에 안 보일 때(앱 시작·탭 복귀 전)는 애니메이션 없이 */
+  if(MD.x!==target&&!MD.anim){if(target===0&&fresh){MD.leave=true;micSlide(0,apply);}   /* 다른 문장으로: 돌아가며 #도 같이 사라짐 */
+    else micSlide(target,apply);return;}
+  if(MD.anim){cancelAnimationFrame(MD.anim);MD.anim=0;micX(target);}
+  apply();}
+(()=>{const b=$('#micBtn');let d=null;
+  const can=()=>{const c=learning();return c&&c.sents&&MD.hash&&!MD.anim&&(SH.phase==='idle'||SH.phase==='done');};
+  b.addEventListener('pointerdown',e=>{if(!can())return;d={x0:e.clientX,b:MD.x,id:e.pointerId,drag:false};});
+  b.addEventListener('pointermove',e=>{if(!d||e.pointerId!==d.id)return;const dx=e.clientX-d.x0;
+    if(!d.drag){if(Math.abs(dx)<10)return;d.drag=true;try{b.setPointerCapture(e.pointerId);}catch(_){}$('#slot').classList.remove('num');}
+    micX(Math.max(0,Math.min(MD.D,d.b+dx)));});
+  const up=cancel=>e=>{const g=d;d=null;if(!g||!g.drag)return;MD.end=Date.now();const c=learning();
+    const want=!cancel&&MD.x>MD.D/2;
+    if(want===SH.on){micSlide(want?MD.D:0,()=>slotText(c));return;}   /* 바뀐 것 없음 — 제자리로 */
+    SFX.peek();SH.on=want;SH.part=want?0:-1;micSlide(want?MD.D:0,()=>{enterSentence(false);});};
+  b.addEventListener('pointerup',up(false));b.addEventListener('pointercancel',up(true));})();
 /* ---------- 쉐도잉 n / nn 꾹 → 그 자리에서 문장 번호 입력 (숫자패드, 넘치면 마지막 문장) ---------- */
 (()=>{const em=$('#shCount');let inp=null;
   const close=go=>{if(!inp)return;const v=inp.value.trim(),c=learning();const el=inp;inp=null;el.remove();
