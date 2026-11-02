@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.9.3 */
+/* Goshé. — 고성능 쉐도잉 v1.9.4 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.9.3').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.9.4').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -378,7 +378,7 @@ function matchWords(words,said){const tt=[],owner=[];words.forEach((w,i)=>canon(
 
 /* ---------- ② 쉐도잉 ---------- */
 const SH={idx:0,part:-1,on:false,listens:0,revealed:new Set(),done:false,phase:'idle',words:[],peeked:false};   // phase: idle | rec | wait | done
-const MD={x:0,D:52,anim:0,leave:false,end:0,idx:-1,hash:false,fading:false};   // 마이크 밀기(덩어리 모드) 상태
+const MD={x:0,D:54,H:27,anim:0,leave:false,end:0,idx:-1,hash:false,fading:false};   // 마이크 밀기(덩어리 모드) 상태
 const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   stop:'<svg width="28" height="28" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="#fff"/></svg>',
   arrow:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
@@ -852,13 +852,13 @@ $('#vFile').addEventListener('change',async e=>{const file=e.target.files&&e.tar
   save();renderVocab();toast(n?`${n}개 가져왔어요`:'새로 추가할 단어가 없어요');});
 
 /* ---------- # 문장: 마이크 버튼 밀기 ----------
-   # 문장에 들어오면 버튼 안 마이크 오른쪽에 흰 #이 빠르게 나타남. 버튼을 오른쪽으로 밀면(52px, 우하단 그림자) 덩어리 모드:
+   # 문장에 들어오면 버튼 안 마이크 오른쪽에 흰 #이 빠르게 나타남. 버튼을 오른쪽으로 밀면(54px, 우하단 그림자) 덩어리 모드:
    #은 화면에 고정이라 지나가는 마이크 그림 뒤로 흐려졌다 다시 보임, 다 밀리면 원래 자리 칸에 1/3이 팟(톡).
    덩어리 1→2→…→Rt(전체 문장 반복, 애니메이션 없이), Rt 끝나고 화살표 = 다음 문장(버튼이 돌아가며 #도 같이 사라짐). 왼쪽으로 밀면 취소 */
 function micX(v){MD.x=v;const b=$('#micBtn'),k=v/MD.D;b.style.transform=v?`translateX(${v}px)`:'';
   b.style.boxShadow=k?`0 ${6+6*k}px ${18+10*k}px rgba(79,109,138,${(.3+.15*k).toFixed(3)}), ${(4*k).toFixed(1)}px ${(3*k).toFixed(1)}px ${(10*k).toFixed(1)}px rgba(31,42,55,${(.25*k).toFixed(3)})`:'';
   const mh=$('#mh');mh.style.transform=v?`translateX(${-v}px)`:'';
-  if(MD.hash&&!MD.fading){let op=Math.min(1,Math.max(0,(Math.abs(v-25)-4)/14));if(MD.leave)op=Math.min(op,k);mh.style.opacity=op.toFixed(2);}}
+  if(MD.hash&&!MD.fading){let op=Math.min(1,Math.max(0,(Math.abs(v-MD.H)-4)/14));if(MD.leave)op=Math.min(op,k);mh.style.opacity=op.toFixed(2);}}
 function micSlide(to,done){cancelAnimationFrame(MD.anim);const from=MD.x,t0=performance.now(),ms=220;$('#slot').classList.remove('num');
   const f=n=>{const k=Math.min(1,(n-t0)/ms),e=1-Math.pow(1-k,3);micX(from+(to-from)*e);if(k<1)MD.anim=requestAnimationFrame(f);else{MD.anim=0;done&&done();}};MD.anim=requestAnimationFrame(f);}
 function slotText(c){const n=nChunks(c.sents[SH.idx]);$('#slotT').textContent=SH.part<0?'Rt':`${SH.part+1}/${n}`;$('#slot').classList.toggle('num',SH.on&&MD.x>=MD.D);}
