@@ -206,8 +206,10 @@ body.folded .micwrap{bottom:var(--micUp,140px)}
 .cnt{position:absolute;top:4px;right:20px;height:16px;display:flex;align-items:flex-start;gap:6px;z-index:3}
 .cnt em{font-style:normal;font-size:11px;line-height:16px;color:var(--faint);margin:0;text-align:right;font-variant-numeric:tabular-nums}   /* 폭은 영상의 전체 문장 수 자릿수로 고정 → 번호가 바뀌어도 저장 아이콘 자리 그대로 */
 #pShadow .cnt{right:0;top:2px}   /* .shad 안(좌우 20px 안쪽, 위로 2px 내려와 있음)이라 보정 */
-#shCount{touch-action:none;transition:transform .14s cubic-bezier(.3,1.6,.5,1)}
-body.chunk #shCount{transform:translateY(16px)}   /* 덩어리 모드: 번호가 한 줄 내려가 있음 */
+#shCount{touch-action:none}
+.hsh{position:absolute;right:1px;top:19px;font-size:10px;font-weight:700;letter-spacing:.02em;line-height:9px;padding:1px 4px;border-radius:999px;border:1px solid #dfe7f0;color:#a9bdd2;background:#f3f6fa;cursor:pointer;transition:color .2s,background .2s,border-color .2s}   /* # 문장 타원: 번호 끝에 맞춤, 번호 아래 3px */
+.hsh.on{color:var(--mint-ink);background:var(--mint-bg);border-color:var(--mint-dot)}
+.hsh[hidden]{display:none}
 .bm{width:36px;height:36px;margin:-5px 0 0;display:flex;align-items:flex-start;justify-content:flex-end;padding-top:6px;color:#c3ccd6}   /* 아이콘 25px, 위쪽을 번호 글자 위쪽에 맞춤 */   /* 아이콘은 오른쪽 끝(번호 쪽)에, 누르는 칸은 넓게 */
 .bm.on{color:var(--navy)}.bm.on svg path{fill:var(--navy)}   /* 말하기 버튼 색, 글로우 없음 */
 #drum{padding-left:14px;margin-left:-14px}   /* 저장 표시가 들어갈 왼쪽 여백 (글자 시작 위치는 그대로) */
