@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.9.0 */
+/* Goshé. — 고성능 쉐도잉 v1.9.1 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.9.0').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.9.1').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -340,8 +340,8 @@ function partRange(c,i,p){const r=rangeOf(c,i);if(p<0)return r;const s=c.sents[i
   const a=p===0?r[0]:s.start+d*before/tot-0.1,b=p===ch.length-1?r[1]:s.start+d*(before+len[p])/tot+0.25;return [Math.max(0,a),b];}
 function cntText(c){const L=c.sents;if(!DB.ui.chunk)return `${SH.idx+1} / ${L.length}`;
   let off=0,tot=0;L.forEach((s,i)=>{const n=nChunks(s);if(i<SH.idx)off+=n;tot+=n;});const n=nChunks(L[SH.idx]);
-  return (n>1&&SH.part<0?`#${off+1}-${off+n}`:`#${off+(SH.part<0?0:SH.part)+1}`)+` / ${tot}`;}
-const markHTML=en=>esc(en).replace(/^(\s*)~\s*/,'$1<span class="mk">~</span>').replace(/\s*#\s*/g,' <span class="mk">#</span> ').replace(/(^|\s)@(?=\S)/g,'$1<span class="mk">@</span>');
+  return `#${off+(SH.part<0?n:SH.part+1)}`+` / ${tot}`;}   /* 전체 문장 단계 = 마지막 덩어리 번호 */
+const markHTML=en=>esc(en).replace(/^(\s*)~\s*/,'$1<span class="mk">~</span>').replace(/(&#?\w+;)|\s*#\s*/g,(m,ent)=>ent||' <span class="mk">#</span> ').replace(/(^|\s)@(?=\S)/g,'$1<span class="mk">@</span>');
 /* i부터 가까운 쉐도잉 문장(~ 아닌 문장): 앞으로 먼저, 없으면 뒤로 */
 function shIdx(c,i){const L=c.sents;i=Math.max(0,Math.min(L.length-1,i));for(let k=i;k<L.length;k++)if(!isSkip(L[k]))return k;for(let k=i-1;k>=0;k--)if(!isSkip(L[k]))return k;return -1;}
 
@@ -528,7 +528,7 @@ let CNTW={n:-1,w:0};function cntWidth(n,d){if(d==null&&CNTW.n===n)return CNTW.w;
   let w=0;for(const host of [$('#shBm').parentNode,$('#scBm').parentNode]){host.appendChild(m);w=Math.ceil(m.getBoundingClientRect().width);m.remove();if(w)break;}   /* 보이는 탭에서 잼 */
   if(w&&d==null)CNTW={n,w};return w;}
 function drawBm(){const c=learning();const w=cntWidth(c&&c.sents?c.sents.length:1);if(w)$$('.cnt em').forEach(e=>e.style.minWidth=w+'px');
-  if(DB.ui.chunk&&c&&c.sents){const T=c.sents.reduce((a,s)=>a+nChunks(s),0);const w2=cntWidth('#'+T+'-'+T,T);if(w2)$('#shCount').style.minWidth=w2+'px';}$('#shBm').classList.toggle('on',isSaved(c,SH.idx));$('#scBm').classList.toggle('on',isSaved(c,$('#drum p')?centerIndex():DR.idx));}
+  if(c&&c.sents){const T=c.sents.reduce((a,s)=>a+nChunks(s),0);const w2=cntWidth('#'+T,T);if(w2&&w2>w)$$('.cnt em').forEach(e=>e.style.minWidth=w2+'px');}   /* 덩어리 모드 번호까지 들어가는 폭 — 모드를 바꿔도 아이콘 자리 그대로 */$('#shBm').classList.toggle('on',isSaved(c,SH.idx));$('#scBm').classList.toggle('on',isSaved(c,$('#drum p')?centerIndex():DR.idx));}
 function toggleSave(){const c=learning();if(!c||!c.sents||!c.sents.length)return;const i=bmIdx();c.saved=Array.isArray(c.saved)?c.saved:[];
   const k=c.saved.indexOf(i);if(k>=0)c.saved.splice(k,1);else{c.saved.push(i);c.saved.sort((a,b)=>a-b);}save();SFX.tok();
   const p=$(`#drum p[data-i="${i}"]`);if(p){const sv=p.querySelector('.sv');if(k>=0)sv&&sv.remove();else if(!sv)p.insertAdjacentHTML('afterbegin',SVI);}drawBm();}
@@ -857,7 +857,7 @@ function setChunk(on){const c=learning();if(SH.phase==='rec'||SH.phase==='wait')
   if(!c||!c.sents||!c.sents.length)return;const was=SH.part;SH.part=on?firstPart(c,SH.idx):-1;
   if(SH.part!==was)enterSentence(false);else{$('#shCount').textContent=cntText(c);c.lastPart=SH.part;save();}drawBm();}
 document.body.classList.toggle('chunk',!!DB.ui.chunk);
-/* ---------- 쉐도잉 n / nn 터치 → 그 자리에서 문장 번호 입력 (숫자패드, 넘치면 마지막 문장) ---------- */
+/* ---------- 쉐도잉 n / nn 꾹 → 그 자리에서 문장 번호 입력 (숫자패드, 넘치면 마지막 문장) ---------- */
 (()=>{const em=$('#shCount');let inp=null;
   const close=go=>{if(!inp)return;const v=inp.value.trim(),c=learning();const el=inp;inp=null;el.remove();
     if(go&&v&&c&&c.sents&&c.sents.length){let n=parseInt(v,10);if(isFinite(n)){
@@ -867,13 +867,17 @@ document.body.classList.toggle('chunk',!!DB.ui.chunk);
     if(c&&c.sents)em.textContent=cntText(c);};
   /* 번호를 끌어내리면 덩어리 모드(딸깍 한 줄 내려감, 번호 앞 #), 올리면 원래대로 — 소리는 톡 */
   let dg=null,dragged=0;
-  em.addEventListener('pointerdown',e=>{e.stopPropagation();if(inp)return;dg={y:e.clientY,id:e.pointerId};try{em.setPointerCapture(e.pointerId);}catch(_){}});
-  em.addEventListener('pointermove',e=>{if(!dg||e.pointerId!==dg.id)return;const dy=e.clientY-dg.y;if(Math.abs(dy)<14)return;dg=null;dragged=Date.now();
+  const busy=()=>{const c=learning();return !c||!c.sents||!c.sents.length||SH.phase==='rec'||SH.phase==='wait';};
+  em.addEventListener('pointerdown',e=>{e.stopPropagation();if(inp)return;const d={y:e.clientY,id:e.pointerId,long:false};
+    d.tm=setTimeout(()=>{if(dg===d&&!busy()){d.long=true;SFX.peek();}},500);dg=d;try{em.setPointerCapture(e.pointerId);}catch(_){}});
+  em.addEventListener('pointermove',e=>{if(!dg||e.pointerId!==dg.id||dg.long)return;const dy=e.clientY-dg.y;if(Math.abs(dy)<14)return;clearTimeout(dg.tm);dg=null;
     if((dy>0)!==!!DB.ui.chunk)setChunk(dy>0);});
-  ['pointerup','pointercancel'].forEach(t=>em.addEventListener(t,()=>{dg=null;}));
-  em.addEventListener('click',e=>{if(Date.now()-dragged<500){e.stopPropagation();return;}e.stopPropagation();const c=learning();if(inp||!c||!c.sents||!c.sents.length||SH.phase==='rec'||SH.phase==='wait')return;
+  em.addEventListener('pointerup',e=>{const d=dg;dg=null;if(!d)return;clearTimeout(d.tm);if(d.long)openInput();});   /* 키보드는 손을 뗄 때 띄워야 아이폰에서 올라옴 */
+  em.addEventListener('pointercancel',()=>{if(dg)clearTimeout(dg.tm);dg=null;});
+  em.addEventListener('click',e=>e.stopPropagation());
+  function openInput(){const c=learning();if(inp||busy())return;
     em.textContent='';inp=document.createElement('input');Object.assign(inp,{type:'text',inputMode:'numeric',pattern:'[0-9]*',autocomplete:'off',enterKeyHint:'go',value:''});inp.className='goin';
     em.appendChild(inp);em.appendChild(document.createTextNode(' / '+cntText(c).split(' / ')[1]));
     inp.addEventListener('input',()=>{inp.value=inp.value.replace(/\D/g,'').slice(0,5);});
     inp.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();close(true);}else if(ev.key==='Escape')close(false);});
-    inp.addEventListener('blur',()=>close(true));inp.focus();});})();   // 빈칸에 커서만, 입력 없이 내리면 원래 번호로
+    inp.addEventListener('blur',()=>close(true));inp.focus();}})();   // 빈칸에 커서만, 입력 없이 내리면 원래 번호로
