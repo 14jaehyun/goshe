@@ -1,4 +1,4 @@
-/* Goshé. — 고성능 쉐도잉 v1.9.4 */
+/* Goshé. — 고성능 쉐도잉 v1.9.5 */
 'use strict';
 const VERSION='1.1';
 const DEFAULT_MODEL='gemini-3.5-flash-lite';
@@ -28,7 +28,7 @@ function rebuildAudio(){try{AC&&AC.close();}catch(e){}AC=null;OUT=null;for(const
 /* 녹음해 둔 효과음 (sfx/*.wav) — 오디오가 켜질 때 한 번 읽어 둠 */
 const SMP={peek:'sfx/peek.wav',wrong:'sfx/wrong.wav',perfect:'sfx/perfect.wav',swap:'sfx/swap.wav',logo:'sfx/logo.wav'},BUF={},SMP_BUSY={};
 function loadSamples(a){Object.keys(SMP).forEach(k=>{if(BUF[k]||SMP_BUSY[k])return;SMP_BUSY[k]=1;
-  fetch(SMP[k]+'?v=1.9.4').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
+  fetch(SMP[k]+'?v=1.9.5').then(r=>r.arrayBuffer()).then(b=>new Promise((ok,ng)=>a.decodeAudioData(b,ok,ng))).then(d=>{if(AC===a)BUF[k]=d;}).catch(()=>{}).finally(()=>{delete SMP_BUSY[k];});});}
 function sample(k,g){const o=bus(g);if(!o)return;const b=BUF[k];if(!b){loadSamples(AC);return;}const s=AC.createBufferSource();s.buffer=b;s.connect(o);s.start(AC.currentTime+0.005);}
 function bus(g){const a=audio();if(!a||MICOPEN)return null;const n=a.createGain();n.gain.value=g;n.connect(OUT);return n;}
 function tone(o,f,type,vol,dec,delay=0){const a=AC,t=a.currentTime+delay+0.005,os=a.createOscillator(),g=a.createGain();os.type=type;os.frequency.value=f;
@@ -137,10 +137,10 @@ function setTab(t,sound){if(sound&&DB.ui.tab!==t)SFX.ding();if(t!=='pScript')sto
   requestAnimationFrame(layout);}
 let TABLONG=0;
 $$('.tab').forEach(b=>b.onclick=()=>{if(Date.now()-TABLONG<700)return;setTab(b.dataset.t,true);});
-/* 스크립트 탭에서 스크립트 버튼 꾹 → 쉐도잉으로 그 문장, 쉐도잉 탭에서 쉐도잉 버튼 꾹 → 스크립트로 그 문장 */
-$$('.tab').forEach(b=>gesture(b,{long:()=>{const t=b.dataset.t,c=learning();if(t!==DB.ui.tab||!c||!c.sents||!c.sents.length)return;
-  if(t==='pScript'){TABLONG=Date.now();SFX.peek();const ci=centerIndex();if(isSkip(c.sents[ci]))return;c.lastIdx=ci;c.lastPart=null;c.lastOn=false;save();setTab('pShadow',false);}   /* ~ 문장이면 소리만 */
-  else if(t==='pShadow'){if(SH.phase==='rec'||SH.phase==='wait')return;TABLONG=Date.now();SFX.peek();c.scIdx=SH.idx;save();setTab('pScript',false);}}}));
+/* 스크립트 탭에서 쉐도잉 버튼 꾹 → 쉐도잉으로 그 문장, 쉐도잉 탭에서 스크립트 버튼 꾹 → 스크립트로 그 문장 */
+$$('.tab').forEach(b=>gesture(b,{long:()=>{const t=b.dataset.t,cur=DB.ui.tab,c=learning();if(t===cur||!c||!c.sents||!c.sents.length)return;   /* 가려는 탭을 꾹 = 지금 문장을 들고 그 탭으로 */
+  if(cur==='pScript'&&t==='pShadow'){TABLONG=Date.now();SFX.peek();const ci=centerIndex();if(isSkip(c.sents[ci]))return;c.lastIdx=ci;c.lastPart=null;c.lastOn=false;save();setTab('pShadow',false);}   /* ~ 문장이면 소리만 */
+  else if(cur==='pShadow'&&t==='pScript'){if(SH.phase==='rec'||SH.phase==='wait')return;TABLONG=Date.now();SFX.peek();c.scIdx=SH.idx;save();setTab('pScript',false);}}}));
 function setFold(f){document.body.classList.toggle('folded',f);DB.ui.folded=f;save();setTimeout(layout,270);}
 $('#fold').onclick=()=>{SFX.tok();setFold(!DB.ui.folded);};
 (()=>{const L=$('#logo'),N=L.querySelector('.lB .n'),T=L.querySelector('.lB .t'),W=['고성능','고강도','고반복','고정밀','고밀도','고집중','고순도','고효율'];let rep=0,last=0,vocN=0; // vocN: 단어장 탭에서 누른 횟수(이스터에그)
@@ -378,7 +378,7 @@ function matchWords(words,said){const tt=[],owner=[];words.forEach((w,i)=>canon(
 
 /* ---------- ② 쉐도잉 ---------- */
 const SH={idx:0,part:-1,on:false,listens:0,revealed:new Set(),done:false,phase:'idle',words:[],peeked:false};   // phase: idle | rec | wait | done
-const MD={x:0,D:54,H:27,anim:0,leave:false,end:0,idx:-1,hash:false,fading:false};   // 마이크 밀기(덩어리 모드) 상태
+const MD={x:0,D:54,H:27,anim:0,leave:false,end:0,idx:-1,hash:false,fading:false,recHide:false};   // 마이크 밀기(덩어리 모드) 상태
 const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>',
   stop:'<svg width="28" height="28" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="#fff"/></svg>',
   arrow:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
@@ -386,7 +386,8 @@ const ICON={mic:'<svg width="34" height="34" viewBox="0 0 24 24" fill="none" str
   wait:'<span class="busy"></span><span class="busy"></span><span class="busy"></span>',
   cry:'<svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><path d="M20 26h8M36 26h8M25 40h14"/></svg>',
   speaker:'<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.5a7.5 7.5 0 0 1 0 11"/></svg>'};
-function setMic(k){const b=$('#micBtn');$('#micIco').innerHTML=ICON[k];b.disabled=(k==='wait');}
+function setMic(k){const b=$('#micBtn');$('#micIco').innerHTML=ICON[k];b.disabled=(k==='wait');
+  const busy=k==='stop'||k==='wave'||k==='wait';if(busy!==MD.recHide){MD.recHide=busy;hashFade();}}   /* 녹음·판정 동안 #은 0.16초 페이드아웃, 끝나면 페이드인 */
 function renderShadow(play){const c=learning();const msg=$('#shMsg');
   const show=on=>{['.top','.trz','#shSent','.micwrap'].forEach(s=>$(s).style.visibility=on?'':'hidden');};
   if(!c||!c.sents||!c.sents.length){show(false);msg.innerHTML=!DB.clips.length?'클립 탭에서 유튜브 링크를 추가해 주세요':'클립 탭에서 스크립트를 불러오고<br>클립을 꾹 눌러 학습할 영상으로 정해 주세요';return;}
@@ -535,7 +536,7 @@ function openSaved(){const c=learning();if(!c||!c.sents)return;SFX.tok();const l
   const sh=$('#sheet');delete sh.dataset.closing;sh.classList.remove('hidden');
   $('#usage').innerHTML=usageHTML();$('#setBox').hidden=false;$('#savedBox').hidden=true;const H=$('#setBox').offsetHeight;   /* 설정창과 같은 높이로 올라오게 */
   $('#setBox').hidden=true;$('#savedBox').hidden=false;$('#savedBox').style.minHeight=H+'px';$('.sheetin').scrollTop=0;sheetAnim('translateY(100%)',0,1000,'cubic-bezier(.22,.8,.24,1)');}
-$('#savedList').addEventListener('click',e=>{const p=e.target.closest('p[data-i]');if(!p)return;const i=+p.dataset.i;SFX.tok();closeSettings();   /* 목록에서 고르면 그 문장으로 */
+$('#savedList').addEventListener('click',e=>{const p=e.target.closest('p[data-i]');if(!p)return;const i=+p.dataset.i,c=learning();if(!c)return;SFX.tok();closeSettings();   /* 목록에서 고르면 그 문장으로 */
   if(DB.ui.tab==='pScript')drumGo(i);else if(SH.phase!=='rec'&&SH.phase!=='wait'){const k=shIdx(c,i);if(k>=0){SH.idx=k;SH.on=false;SH.part=-1;enterSentence(false);}}});
 ['#shBm','#scBm'].forEach(s=>{const b=$(s);b.addEventListener('pointerdown',e=>e.stopPropagation());gesture(b,{tap:()=>toggleSave(),long:()=>openSaved()});});
 /* 단어 뜻 팝업 */
@@ -853,20 +854,26 @@ $('#vFile').addEventListener('change',async e=>{const file=e.target.files&&e.tar
 
 /* ---------- # 문장: 마이크 버튼 밀기 ----------
    # 문장에 들어오면 버튼 안 마이크 오른쪽에 흰 #이 빠르게 나타남. 버튼을 오른쪽으로 밀면(54px, 우하단 그림자) 덩어리 모드:
-   #은 화면에 고정이라 지나가는 마이크 그림 뒤로 흐려졌다 다시 보임, 다 밀리면 원래 자리 칸에 1/3이 팟(톡).
+   #은 화면에 고정이라 지나가는 마이크 그림 뒤로 흐려졌다 다시 보임, 다 밀리면 원래 자리 칸에 1/3이 팟(삑).
    덩어리 1→2→…→Rt(전체 문장 반복, 애니메이션 없이), Rt 끝나고 화살표 = 다음 문장(버튼이 돌아가며 #도 같이 사라짐). 왼쪽으로 밀면 취소 */
 function micX(v){MD.x=v;const b=$('#micBtn'),k=v/MD.D;b.style.transform=v?`translateX(${v}px)`:'';
   b.style.boxShadow=k?`0 ${6+6*k}px ${18+10*k}px rgba(79,109,138,${(.3+.15*k).toFixed(3)}), ${(4*k).toFixed(1)}px ${(3*k).toFixed(1)}px ${(10*k).toFixed(1)}px rgba(31,42,55,${(.25*k).toFixed(3)})`:'';
   const mh=$('#mh');mh.style.transform=v?`translateX(${-v}px)`:'';
-  if(MD.hash&&!MD.fading){let op=Math.min(1,Math.max(0,(Math.abs(v-MD.H)-4)/14));if(MD.leave)op=Math.min(op,k);mh.style.opacity=op.toFixed(2);}}
-function micSlide(to,done){cancelAnimationFrame(MD.anim);const from=MD.x,t0=performance.now(),ms=220;$('#slot').classList.remove('num');
-  const f=n=>{const k=Math.min(1,(n-t0)/ms),e=1-Math.pow(1-k,3);micX(from+(to-from)*e);if(k<1)MD.anim=requestAnimationFrame(f);else{MD.anim=0;done&&done();}};MD.anim=requestAnimationFrame(f);}
+  if(MD.hash&&!MD.fading)mh.style.opacity=hashOp().toFixed(2);}
+function hashOp(){if(MD.recHide)return 0;let op=Math.min(1,Math.max(0,(Math.abs(MD.x-MD.H)-4)/14));if(MD.leave)op=Math.min(op,MD.x/MD.D);return op;}
+function hashFade(){if(!MD.hash)return;const mh=$('#mh');const from=+getComputedStyle(mh).opacity||0,to=hashOp();mh.getAnimations().forEach(a=>a.cancel());
+  MD.fading=true;mh.style.opacity=to;mh.animate([{opacity:from},{opacity:to}],{duration:160,easing:'ease-out'}).onfinish=()=>{MD.fading=false;micX(MD.x);};}
+/* 남은 거리만큼만 시간을 씀(끝까지 밀었으면 바로), 1px 안쪽이면 도착으로 침 → 숫자가 늦게 뜨지 않게 */
+function micSlide(to,done){cancelAnimationFrame(MD.anim);MD.anim=0;const from=MD.x,dist=Math.abs(to-from),ms=220*dist/MD.D,t0=performance.now();$('#slot').classList.remove('num');
+  if(dist<1){micX(to);done&&done();return;}
+  const f=n=>{const k=Math.min(1,(n-t0)/ms),e=1-Math.pow(1-k,3),v=from+(to-from)*e;
+    if(k>=1||Math.abs(to-v)<1){micX(to);MD.anim=0;done&&done();return;}micX(v);MD.anim=requestAnimationFrame(f);};MD.anim=requestAnimationFrame(f);}
 function slotText(c){const n=nChunks(c.sents[SH.idx]);$('#slotT').textContent=SH.part<0?'Rt':`${SH.part+1}/${n}`;$('#slot').classList.toggle('num',SH.on&&MD.x>=MD.D);}
 /* 문장에 들어올 때마다: # 표시·칸·버튼 위치 맞춤 */
 function micMode(c){const n=nChunks(c.sents[SH.idx]),hash=n>1,fresh=MD.idx!==SH.idx,mh=$('#mh');MD.idx=SH.idx;
   const apply=()=>{MD.hash=hash;$('#slot').hidden=!hash;MD.leave=false;
-    if(!hash){mh.style.opacity=0;}else if(fresh&&!SH.on){mh.getAnimations().forEach(a=>a.cancel());MD.fading=true;mh.style.opacity=1;   /* 빠른 페이드인 */
-      mh.animate([{opacity:0},{opacity:1}],{duration:160,easing:'ease-out'}).onfinish=()=>{MD.fading=false;micX(MD.x);};}
+    if(!hash){mh.style.opacity=0;}else if(fresh&&!SH.on){mh.getAnimations().forEach(a=>a.cancel());MD.fading=true;mh.style.opacity=hashOp();   /* 빠른 페이드인 */
+      mh.animate([{opacity:0},{opacity:hashOp()}],{duration:160,easing:'ease-out'}).onfinish=()=>{MD.fading=false;micX(MD.x);};}
     micX(MD.x);slotText(c);};
   const target=SH.on&&hash?MD.D:0;
   if(fresh&&MD.anim===0&&$('#micBtn').offsetParent===null){micX(target);}   /* 화면에 안 보일 때(앱 시작·탭 복귀 전)는 애니메이션 없이 */
@@ -883,7 +890,7 @@ function micMode(c){const n=nChunks(c.sents[SH.idx]),hash=n>1,fresh=MD.idx!==SH.
   const up=cancel=>e=>{const g=d;d=null;if(!g||!g.drag)return;MD.end=Date.now();const c=learning();
     const want=!cancel&&MD.x>MD.D/2;
     if(want===SH.on){micSlide(want?MD.D:0,()=>slotText(c));return;}   /* 바뀐 것 없음 — 제자리로 */
-    SFX.peek();SH.on=want;SH.part=want?0:-1;micSlide(want?MD.D:0,()=>{enterSentence(false);});};
+    SFX.tok();SH.on=want;SH.part=want?0:-1;micSlide(want?MD.D:0,()=>{enterSentence(false);});};
   b.addEventListener('pointerup',up(false));b.addEventListener('pointercancel',up(true));})();
 /* ---------- 쉐도잉 n / nn 꾹 → 그 자리에서 문장 번호 입력 (숫자패드, 넘치면 마지막 문장) ---------- */
 (()=>{const em=$('#shCount');let inp=null;
